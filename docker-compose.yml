@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lokahome-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://lokahome:lokahome@db:5432/lokahome
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - ENVIRONMENT=development
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./app:/app/app
+    networks:
+      - lokahome-network
+
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: lokahome-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=lokahome
+      - POSTGRES_PASSWORD=lokahome
+      - POSTGRES_DB=lokahome
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lokahome"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lokahome-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lokahome-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - lokahome-network
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lokahome-celery-worker
+    restart: unless-stopped
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://lokahome:lokahome@db:5432/lokahome
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+    networks:
+      - lokahome-network
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lokahome-celery-beat
+    restart: unless-stopped
+    command: celery -A app.tasks beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://lokahome:lokahome@db:5432/lokahome
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./app:/app/app
+    networks:
+      - lokahome-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  lokahome-network:
+    driver: bridge
