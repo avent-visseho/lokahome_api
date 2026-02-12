@@ -70,7 +70,9 @@ class PropertyService:
         property_data["owner_id"] = owner.id
         property_data["status"] = PropertyStatus.PENDING  # Requires approval
 
-        return await self.property_repo.create(property_data)
+        property_obj = await self.property_repo.create(property_data)
+        # Reload with images eagerly loaded for response serialization
+        return await self.property_repo.get_with_details(property_obj.id)  # type: ignore[return-value]
 
     async def update_property(
         self,
@@ -209,6 +211,7 @@ class PropertyService:
         user: User,
         url: str,
         is_primary: bool = False,
+        caption: str | None = None,
     ) -> PropertyImage:
         """Add image to property."""
         property_obj = await self.get_property(property_id)
@@ -220,12 +223,16 @@ class PropertyService:
         images = await self.image_repo.get_by_property(property_id)
         order = len(images)
 
-        return await self.image_repo.create({
+        data: dict = {
             "property_id": property_id,
             "url": url,
-            "is_primary": is_primary and order == 0,  # First image is primary
+            "is_primary": is_primary or order == 0,  # First image is always primary
             "order": order,
-        })
+        }
+        if caption:
+            data["caption"] = caption
+
+        return await self.image_repo.create(data)
 
     async def delete_image(
         self,

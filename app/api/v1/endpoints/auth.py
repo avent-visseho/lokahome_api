@@ -9,14 +9,18 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.api.deps import ActiveUser, DbSession
 from app.schemas.base import MessageResponse
 from app.schemas.user import (
+    ChangePassword,
+    FcmTokenUpdate,
     PasswordResetConfirm,
     PasswordResetRequest,
     RefreshTokenRequest,
     TokenResponse,
     UserRegister,
     UserResponse,
+    UserUpdate,
 )
 from app.services.auth import AuthService
+from app.services.user import UserService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -174,3 +178,65 @@ async def logout(
     """
     # TODO: Add token to Redis blacklist if needed
     return MessageResponse(message="Déconnexion réussie")
+
+
+@router.post(
+    "/fcm-token",
+    response_model=MessageResponse,
+    summary="Enregistrer le token FCM",
+)
+async def update_fcm_token(
+    data: FcmTokenUpdate,
+    current_user: ActiveUser,
+    session: DbSession,
+):
+    """
+    Enregistrer ou mettre à jour le token FCM pour les notifications push.
+    """
+    user_service = UserService(session)
+    await user_service.update_fcm_token(current_user, data.fcm_token)
+    return MessageResponse(message="Token FCM mis à jour")
+
+
+@router.patch(
+    "/profile",
+    response_model=UserResponse,
+    summary="Mettre à jour le profil",
+)
+async def update_profile(
+    data: UserUpdate,
+    current_user: ActiveUser,
+    session: DbSession,
+):
+    """
+    Mettre à jour le profil de l'utilisateur connecté.
+
+    - **first_name**: Prénom
+    - **last_name**: Nom de famille
+    - **phone**: Numéro de téléphone
+    - **bio**: Biographie
+    """
+    user_service = UserService(session)
+    updated = await user_service.update_profile(current_user, data)
+    return updated
+
+
+@router.post(
+    "/change-password",
+    response_model=MessageResponse,
+    summary="Changer le mot de passe",
+)
+async def change_password(
+    data: ChangePassword,
+    current_user: ActiveUser,
+    session: DbSession,
+):
+    """
+    Changer le mot de passe de l'utilisateur connecté.
+
+    - **current_password**: Mot de passe actuel
+    - **new_password**: Nouveau mot de passe (min. 8 caractères)
+    """
+    user_service = UserService(session)
+    await user_service.change_password(current_user, data)
+    return MessageResponse(message="Mot de passe modifié avec succès")

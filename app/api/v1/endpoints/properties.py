@@ -1,9 +1,11 @@
 """
 Property endpoints for listing management.
 """
+import uuid as uuid_mod
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, File, Form, Query, UploadFile, status
 
 from app.api.deps import ActiveUser, DbSession, RequireAdmin, RequireLandlord
 from app.models.property import PropertyStatus, PropertyType
@@ -12,12 +14,17 @@ from app.schemas.property import (
     NearbyPropertiesRequest,
     PropertyCreate,
     PropertyDetailResponse,
+    PropertyImageResponse,
     PropertyListResponse,
     PropertyResponse,
     PropertySearchParams,
     PropertyUpdate,
 )
 from app.services.property import PropertyService
+
+UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "images" / "properties"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter(prefix="/properties", tags=["Properties"])
 
@@ -309,3 +316,84 @@ async def feature_property(
     """Mettre une annonce en vedette."""
     property_service = PropertyService(session)
     return await property_service.feature_property(property_id, featured)
+
+
+# Image upload
+@router.post(
+    "/{property_id}/images",
+    response_model=PropertyImageResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Uploader une image de propriété",
+)
+async def upload_property_image(
+    property_id: UUID,
+    current_user: ActiveUser,
+    session: DbSession,
+    file: UploadFile = File(...),
+    is_primary: bool = Form(False),
+    caption: str | None = Form(None),
+):
+    """
+    Uploader une image pour une propriété.
+
+    - Formats acceptés : JPEG, PNG, WebP
+    - Taille max : 10 Mo
+    - La première image est automatiquement définie comme principale
+    """
+    from fastapi import HTTPException
+
+    # Validate file type
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Type de fichier non autorisé. Utilisez JPEG, PNG ou WebP.",
+        )
+
+    # Read and validate file size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail="L'image ne doit pas dépasser 10 Mo.",
+        )
+
+    # Save to static directory
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename).suffix.lower() if file.filename else ".jpg"
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    filename = f"{uuid_mod.uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / filename
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # Create database record
+    url = f"/static/images/properties/{filename}"
+    property_service = PropertyService(session)
+    image = await property_service.add_image(
+        property_id=property_id,
+        user=current_user,
+        url=url,
+        is_primary=is_primary,
+        caption=caption,
+    )
+
+    return image
+
+
+@router.delete(
+    "/{property_id}/images/{image_id}",
+    response_model=MessageResponse,
+    summary="Supprimer une image de propriété",
+)
+async def delete_property_image(
+    property_id: UUID,
+    image_id: UUID,
+    current_user: ActiveUser,
+    session: DbSession,
+):
+    """Supprimer une image d'une propriété."""
+    property_service = PropertyService(session)
+    await property_service.delete_image(image_id, current_user)
+    return MessageResponse(message="Image supprimée avec succès")

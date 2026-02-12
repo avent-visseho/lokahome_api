@@ -76,6 +76,12 @@ class ChangePassword(BaseSchema):
     new_password: str = Field(min_length=8)
 
 
+class FcmTokenUpdate(BaseSchema):
+    """FCM token update request."""
+
+    fcm_token: str = Field(min_length=10, max_length=500)
+
+
 # --- User Profile Schemas ---
 class UserBase(BaseSchema):
     """Base user schema."""

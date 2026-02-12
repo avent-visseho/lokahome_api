@@ -1,6 +1,7 @@
 """
 Service marketplace schemas for validation and serialization.
 """
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -143,7 +144,7 @@ class ServiceRequestListResponse(BaseSchema):
     budget_min: Decimal | None
     budget_max: Decimal | None
     currency: str
-    created_at: str
+    created_at: datetime
 
 
 # --- Service Quote Schemas ---
@@ -184,7 +185,7 @@ class ServiceQuoteListResponse(BaseSchema):
     estimated_duration: str | None
     status: QuoteStatus
     provider: ServiceProviderListResponse
-    created_at: str
+    created_at: datetime
 
 
 # --- Search and Filter Schemas ---

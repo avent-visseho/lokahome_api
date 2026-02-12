@@ -145,6 +145,19 @@ class Property(BaseModel):
         "Review", back_populates="property", cascade="all, delete-orphan"
     )
 
+    @property
+    def primary_image_url(self) -> str | None:
+        """Return the URL of the primary image (or first image)."""
+        try:
+            for img in self.images:
+                if img.is_primary:
+                    return img.url
+            if self.images:
+                return self.images[0].url
+        except Exception:
+            pass
+        return None
+
     def __repr__(self) -> str:
         return f"<Property {self.title}>"
 

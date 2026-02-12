@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.booking import Booking, BookingStatus
+from app.models.property import Property
 from app.repositories.base import BaseRepository
 
 
@@ -46,7 +47,8 @@ class BookingRepository(BaseRepository[Booking]):
         result = await self.session.execute(
             select(Booking)
             .options(
-                selectinload(Booking.booked_property),
+                selectinload(Booking.booked_property).selectinload(Property.images),
+                selectinload(Booking.booked_property).selectinload(Property.owner),
                 selectinload(Booking.tenant),
                 selectinload(Booking.payments),
             )
@@ -59,7 +61,8 @@ class BookingRepository(BaseRepository[Booking]):
         result = await self.session.execute(
             select(Booking)
             .options(
-                selectinload(Booking.booked_property),
+                selectinload(Booking.booked_property).selectinload(Property.images),
+                selectinload(Booking.booked_property).selectinload(Property.owner),
                 selectinload(Booking.tenant),
             )
             .where(Booking.reference == reference)
@@ -78,7 +81,9 @@ class BookingRepository(BaseRepository[Booking]):
         query = (
             select(Booking)
             .options(
-                selectinload(Booking.booked_property),
+                selectinload(Booking.booked_property).selectinload(Property.images),
+                selectinload(Booking.booked_property).selectinload(Property.owner),
+                selectinload(Booking.tenant),
             )
             .where(Booking.tenant_id == tenant_id)
         )
@@ -103,6 +108,8 @@ class BookingRepository(BaseRepository[Booking]):
         query = (
             select(Booking)
             .options(
+                selectinload(Booking.booked_property).selectinload(Property.images),
+                selectinload(Booking.booked_property).selectinload(Property.owner),
                 selectinload(Booking.tenant),
             )
             .where(Booking.property_id == property_id)
@@ -125,13 +132,12 @@ class BookingRepository(BaseRepository[Booking]):
         limit: int = 100,
     ) -> list[Booking]:
         """Get bookings for all properties owned by a landlord."""
-        from app.models.property import Property
-
         query = (
             select(Booking)
             .join(Property)
             .options(
-                selectinload(Booking.booked_property),
+                selectinload(Booking.booked_property).selectinload(Property.images),
+                selectinload(Booking.booked_property).selectinload(Property.owner),
                 selectinload(Booking.tenant),
             )
             .where(Property.owner_id == owner_id)

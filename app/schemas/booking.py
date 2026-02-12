@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 
 from app.models.booking import BookingStatus
 from app.schemas.base import BaseSchema, IDSchema, TimestampSchema
@@ -86,7 +86,7 @@ class BookingResponse(IDSchema, TimestampSchema):
 class BookingDetailResponse(BookingResponse):
     """Detailed booking response with property and tenant info."""
 
-    property: PropertyListResponse
+    property: PropertyListResponse = Field(validation_alias=AliasChoices("property", "booked_property"))
     tenant: UserPublicProfile
 
 
@@ -100,7 +100,7 @@ class BookingListResponse(BaseSchema):
     status: BookingStatus
     total_amount: Decimal
     currency: str
-    property: PropertyListResponse
+    property: PropertyListResponse = Field(validation_alias=AliasChoices("property", "booked_property"))
     tenant: UserPublicProfile
 
 

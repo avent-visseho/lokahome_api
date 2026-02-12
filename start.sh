@@ -99,27 +99,17 @@ cmd_dev() {
     check_env
     check_dependencies
 
-    # Activer ou créer venv
+    # Activer ou créer venv automatiquement
     if ! activate_venv; then
-        warning "Environnement virtuel non trouvé"
-        read -p "Créer un environnement virtuel? (o/N) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Oo]$ ]]; then
-            create_venv
-            install_deps
-        fi
+        warning "Environnement virtuel non trouvé, création automatique..."
+        create_venv
+        install_deps
     fi
 
-    # Vérifier si uvicorn est installé
-    if ! command -v uvicorn &> /dev/null; then
-        warning "uvicorn n'est pas installé"
-        read -p "Installer les dépendances? (O/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            install_deps
-        else
-            error "uvicorn requis pour démarrer le serveur"
-        fi
+    # Vérifier si uvicorn est installé, sinon installer les dépendances
+    if ! python -c "import uvicorn" &> /dev/null; then
+        warning "uvicorn n'est pas installé, installation des dépendances..."
+        install_deps
     fi
 
     info "Démarrage en mode développement..."
@@ -128,7 +118,7 @@ cmd_dev() {
     echo -e "${GREEN}Documentation: http://localhost:8000/docs${NC}"
     echo ""
 
-    uvicorn app.main:app --reload --port 8000
+    python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 }
 
 # Mode Docker

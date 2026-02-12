@@ -2,17 +2,20 @@
 LOKAHOME API - Main application entry point.
 """
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_db, init_db
 from app.core.exceptions import BaseAPIException
-from app.core.init_db import init_superadmin
+from app.core.init_db import init_superadmin, init_test_users
+from app.core.seed_data import init_seed_data
 from app.core.redis import redis_manager
 
 
@@ -32,6 +35,14 @@ async def lifespan(app: FastAPI):
 
     # Create super admin if not exists
     await init_superadmin()
+
+    # Create test users in debug mode
+    if settings.DEBUG:
+        await init_test_users()
+
+    # Seed demo data in debug mode
+    if settings.DEBUG:
+        await init_seed_data()
 
     # Connect to Redis
     try:
@@ -98,6 +109,11 @@ def create_application() -> FastAPI:
 
     # Include API router
     app.include_router(api_router)
+
+    # Mount static files for property images
+    static_dir = Path(__file__).parent.parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # Health check endpoint
     @app.get("/health", tags=["Health"])

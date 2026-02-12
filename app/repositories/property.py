@@ -4,7 +4,7 @@ Property repository for data access operations.
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -228,11 +228,13 @@ class PropertyRepository(BaseRepository[Property]):
         return list(result.scalars().all())
 
     async def increment_views(self, property_id: UUID) -> None:
-        """Increment property view count."""
-        property_obj = await self.get(property_id)
-        if property_obj:
-            property_obj.views_count += 1
-            await self.session.flush()
+        """Increment property view count without expiring identity-mapped objects."""
+        await self.session.execute(
+            update(Property)
+            .where(Property.id == property_id)
+            .values(views_count=Property.views_count + 1)
+            .execution_options(synchronize_session=False)
+        )
 
     async def get_featured(self, *, limit: int = 10) -> list[Property]:
         """Get featured properties."""

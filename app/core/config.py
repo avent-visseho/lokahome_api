@@ -43,7 +43,8 @@ class Settings(BaseSettings):
 
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 10000
+    #PORT: int = 8000
     WORKERS: int = 4
     RELOAD: bool = False
 

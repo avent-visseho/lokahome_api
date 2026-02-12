@@ -253,8 +253,13 @@ class ServiceMarketplaceService:
 
     # Provider Management
     async def get_provider(self, provider_id: UUID) -> ServiceProvider:
-        """Get provider by ID."""
-        provider = await self.provider_repo.get(provider_id)
+        """Get provider by ID with user eagerly loaded."""
+        result = await self.session.execute(
+            select(ServiceProvider)
+            .options(selectinload(ServiceProvider.user))
+            .where(ServiceProvider.id == provider_id)
+        )
+        provider = result.scalar_one_or_none()
         if not provider:
             raise NotFoundException("Prestataire")
         return provider
@@ -282,7 +287,9 @@ class ServiceMarketplaceService:
             "user_id": user.id,
         }
 
-        return await self.provider_repo.create(provider_data)
+        await self.provider_repo.create(provider_data)
+        # Reload with user eagerly loaded for response serialization
+        return await self.provider_repo.get_by_user(user.id)  # type: ignore[return-value]
 
     async def update_provider_profile(
         self, provider_id: UUID, user: User, data: dict
@@ -293,7 +300,9 @@ class ServiceMarketplaceService:
         if provider.user_id != user.id and user.role != UserRole.ADMIN:
             raise InsufficientPermissionsException()
 
-        return await self.provider_repo.update(provider, data)
+        await self.provider_repo.update(provider, data)
+        # Reload with user eagerly loaded for response serialization
+        return await self.provider_repo.get_by_user(provider.user_id)  # type: ignore[return-value]
 
     async def search_providers(
         self,
@@ -339,7 +348,9 @@ class ServiceMarketplaceService:
             "status": ServiceRequestStatus.PENDING,
         }
 
-        return await self.request_repo.create(request_data)
+        request_obj = await self.request_repo.create(request_data)
+        # Reload with requester eagerly loaded for response serialization
+        return await self.request_repo.get_with_details(request_obj.id)  # type: ignore[return-value]
 
     async def update_request(
         self, request_id: UUID, user: User, data: dict
@@ -358,7 +369,8 @@ class ServiceMarketplaceService:
                 "Vous ne pouvez modifier qu'une demande en attente"
             )
 
-        return await self.request_repo.update(request, data)
+        await self.request_repo.update(request, data)
+        return await self.request_repo.get_with_details(request_id)  # type: ignore[return-value]
 
     async def cancel_request(
         self, request_id: UUID, user: User
@@ -377,9 +389,10 @@ class ServiceMarketplaceService:
                 "Vous ne pouvez pas annuler une demande en cours ou terminée"
             )
 
-        return await self.request_repo.update(
+        await self.request_repo.update(
             request, {"status": ServiceRequestStatus.CANCELLED}
         )
+        return await self.request_repo.get_with_details(request_id)  # type: ignore[return-value]
 
     async def get_user_requests(
         self,
@@ -460,7 +473,13 @@ class ServiceMarketplaceService:
                 request, {"status": ServiceRequestStatus.QUOTED}
             )
 
-        return quote
+        # Reload with provider eagerly loaded for response serialization
+        result = await self.session.execute(
+            select(ServiceQuote)
+            .options(selectinload(ServiceQuote.provider).selectinload(ServiceProvider.user))
+            .where(ServiceQuote.id == quote.id)
+        )
+        return result.scalar_one()  # type: ignore[return-value]
 
     async def accept_quote(
         self, quote_id: UUID, user: User
@@ -476,7 +495,7 @@ class ServiceMarketplaceService:
             raise BusinessLogicException("Ce devis n'est plus disponible")
 
         # Update quote status
-        quote = await self.quote_repo.update(quote, {"status": QuoteStatus.ACCEPTED})
+        await self.quote_repo.update(quote, {"status": QuoteStatus.ACCEPTED})
 
         # Update request with accepted quote
         await self.request_repo.update(
@@ -495,7 +514,13 @@ class ServiceMarketplaceService:
                     other_quote, {"status": QuoteStatus.REJECTED}
                 )
 
-        return quote
+        # Reload with provider eagerly loaded for response serialization
+        result = await self.session.execute(
+            select(ServiceQuote)
+            .options(selectinload(ServiceQuote.provider).selectinload(ServiceProvider.user))
+            .where(ServiceQuote.id == quote.id)
+        )
+        return result.scalar_one()  # type: ignore[return-value]
 
     async def reject_quote(
         self, quote_id: UUID, user: User
@@ -510,7 +535,14 @@ class ServiceMarketplaceService:
         if quote.status != QuoteStatus.PENDING:
             raise BusinessLogicException("Ce devis n'est plus en attente")
 
-        return await self.quote_repo.update(quote, {"status": QuoteStatus.REJECTED})
+        await self.quote_repo.update(quote, {"status": QuoteStatus.REJECTED})
+        # Reload with provider eagerly loaded for response serialization
+        result = await self.session.execute(
+            select(ServiceQuote)
+            .options(selectinload(ServiceQuote.provider).selectinload(ServiceProvider.user))
+            .where(ServiceQuote.id == quote.id)
+        )
+        return result.scalar_one()  # type: ignore[return-value]
 
     async def get_request_quotes(self, request_id: UUID) -> list[ServiceQuote]:
         """Get all quotes for a request."""
@@ -547,9 +579,10 @@ class ServiceMarketplaceService:
                 "Le service doit être accepté et payé avant de commencer"
             )
 
-        return await self.request_repo.update(
+        await self.request_repo.update(
             request, {"status": ServiceRequestStatus.IN_PROGRESS}
         )
+        return await self.request_repo.get_with_details(request_id)  # type: ignore[return-value]
 
     async def complete_service(
         self, request_id: UUID, provider: ServiceProvider
@@ -570,6 +603,7 @@ class ServiceMarketplaceService:
         provider.completed_jobs += 1
         await self.session.flush()
 
-        return await self.request_repo.update(
+        await self.request_repo.update(
             request, {"status": ServiceRequestStatus.COMPLETED}
         )
+        return await self.request_repo.get_with_details(request_id)  # type: ignore[return-value]
