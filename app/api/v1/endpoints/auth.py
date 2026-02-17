@@ -3,7 +3,10 @@ Authentication endpoints for user login, registration, and token management.
 """
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+import uuid as uuid_mod
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import ActiveUser, DbSession
@@ -147,6 +150,36 @@ async def verify_email(
     return MessageResponse(message="Email vérifié avec succès")
 
 
+@router.post(
+    "/resend-verification",
+    response_model=MessageResponse,
+    summary="Renvoyer l'email de vérification",
+)
+async def resend_verification_email(
+    current_user: ActiveUser,
+    session: DbSession,
+):
+    """
+    Renvoyer un email de vérification à l'utilisateur connecté.
+
+    Génère un nouveau token de vérification et l'envoie par email.
+    Pour des raisons de sécurité, retourne toujours un succès.
+    """
+    if current_user.email_verified_at is not None:
+        return MessageResponse(message="Email déjà vérifié")
+
+    auth_service = AuthService(session)
+    token = auth_service.create_verification_token(current_user.email)
+
+    # TODO: Send email via Celery task in production
+    # For development, log the token
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Verification token for {current_user.email}: {token}")
+
+    return MessageResponse(message="Email de vérification envoyé")
+
+
 @router.get(
     "/me",
     response_model=UserResponse,
@@ -240,3 +273,62 @@ async def change_password(
     user_service = UserService(session)
     await user_service.change_password(current_user, data)
     return MessageResponse(message="Mot de passe modifié avec succès")
+
+
+AVATAR_UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "images" / "avatars"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post(
+    "/avatar",
+    response_model=UserResponse,
+    summary="Uploader un avatar",
+)
+async def upload_avatar(
+    current_user: ActiveUser,
+    session: DbSession,
+    file: UploadFile = File(...),
+):
+    """
+    Uploader ou remplacer l'avatar de l'utilisateur.
+
+    - Formats acceptés : JPEG, PNG, WebP
+    - Taille max : 5 Mo
+    """
+    from fastapi import HTTPException
+
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Type de fichier non autorisé. Utilisez JPEG, PNG ou WebP.",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_AVATAR_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail="L'image ne doit pas dépasser 5 Mo.",
+        )
+
+    AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Delete old avatar file if exists
+    if current_user.avatar_url and current_user.avatar_url.startswith("/static/images/avatars/"):
+        old_path = Path(__file__).parent.parent.parent.parent.parent / current_user.avatar_url.lstrip("/")
+        if old_path.exists():
+            old_path.unlink()
+
+    ext = Path(file.filename).suffix.lower() if file.filename else ".jpg"
+    if ext not in {".jpg", ".jpeg", ".png", ".webp"}:
+        ext = ".jpg"
+    filename = f"{uuid_mod.uuid4().hex}{ext}"
+    file_path = AVATAR_UPLOAD_DIR / filename
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    avatar_url = f"/static/images/avatars/{filename}"
+    user_service = UserService(session)
+    updated = await user_service.update_avatar(current_user, avatar_url)
+    return updated
