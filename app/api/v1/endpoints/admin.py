@@ -1,7 +1,7 @@
 """
 Admin endpoints for platform management and moderation.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -75,7 +75,7 @@ async def get_admin_dashboard(
     payments_row = payments_result.first()
 
     # Recent activity counts (last 30 days)
-    thirty_days_ago = datetime.utcnow().replace(
+    thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
@@ -355,8 +355,8 @@ async def list_all_properties(
                     "name": f"{prop.owner.first_name} {prop.owner.last_name}",
                 },
                 "city": prop.city,
-                "price_per_night": float(prop.price_per_night) if prop.price_per_night else None,
-                "price_per_month": float(prop.price_per_month) if prop.price_per_month else None,
+                "price": float(prop.price) if prop.price else None,
+                "rental_period": prop.rental_period.value if prop.rental_period else None,
                 "created_at": prop.created_at.isoformat(),
             }
             for prop in properties
@@ -379,7 +379,7 @@ async def approve_property(
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Bien non trouvé")
 
-    prop.status = PropertyStatus.PUBLISHED
+    prop.status = PropertyStatus.ACTIVE
     await session.commit()
 
     return MessageResponse(message="Bien approuvé et publié")
@@ -402,11 +402,12 @@ async def reject_property(
         raise NotFoundError("Bien non trouvé")
 
     prop.status = PropertyStatus.REJECTED
-    if reason:
-        prop.admin_notes = reason
     await session.commit()
 
-    return MessageResponse(message="Bien rejeté")
+    msg = "Bien rejeté"
+    if reason:
+        msg += f" — Raison : {reason}"
+    return MessageResponse(message=msg)
 
 
 @router.post(
@@ -425,12 +426,13 @@ async def suspend_property(
         from app.core.exceptions import NotFoundError
         raise NotFoundError("Bien non trouvé")
 
-    prop.status = PropertyStatus.SUSPENDED
-    if reason:
-        prop.admin_notes = reason
+    prop.status = PropertyStatus.INACTIVE
     await session.commit()
 
-    return MessageResponse(message="Bien suspendu")
+    msg = "Bien suspendu"
+    if reason:
+        msg += f" — Raison : {reason}"
+    return MessageResponse(message=msg)
 
 
 # === Service Provider Management ===
@@ -473,7 +475,7 @@ async def list_providers(
                     "name": f"{provider.user.first_name} {provider.user.last_name}",
                 },
                 "business_name": provider.business_name,
-                "service_types": provider.service_types,
+                "categories": provider.categories,
                 "is_verified": provider.is_verified,
                 "rating": float(provider.rating) if provider.rating else None,
                 "created_at": provider.created_at.isoformat(),
@@ -539,7 +541,7 @@ async def get_pending_reviews(
     """Récupérer les avis signalés ou en attente de modération."""
     query = (
         select(Review)
-        .where(Review.is_hidden)
+        .where(Review.is_visible == False)
         .options(
             selectinload(Review.reviewer),
         )
@@ -567,7 +569,7 @@ async def get_pending_reviews(
                 },
                 "rating": review.rating,
                 "comment": review.comment,
-                "admin_notes": review.admin_notes,
+                "moderation_note": review.moderation_note,
                 "created_at": review.created_at.isoformat(),
             }
             for review in reviews
@@ -591,12 +593,13 @@ async def list_all_payments(
     limit: int = Query(default=50, ge=1, le=100),
 ) -> dict[str, Any]:
     """Lister tous les paiements avec filtres."""
-    query = select(Payment).options(selectinload(Payment.user))
+    from app.models.payment import PaymentMethod
+    query = select(Payment)
 
     if status:
         query = query.where(Payment.status == status)
     if provider:
-        query = query.where(Payment.provider == provider)
+        query = query.where(Payment.payment_method == provider)
     if start_date:
         query = query.where(
             Payment.created_at >= datetime.combine(start_date, datetime.min.time())
@@ -623,13 +626,11 @@ async def list_all_payments(
             {
                 "id": str(payment.id),
                 "reference": payment.reference,
-                "user": {
-                    "id": str(payment.user.id),
-                    "email": payment.user.email,
-                },
+                "payer_id": str(payment.payer_id),
+                "receiver_id": str(payment.receiver_id),
                 "amount": float(payment.amount),
                 "currency": payment.currency,
-                "provider": payment.provider,
+                "payment_method": payment.payment_method.value,
                 "status": payment.status.value,
                 "created_at": payment.created_at.isoformat(),
             }
