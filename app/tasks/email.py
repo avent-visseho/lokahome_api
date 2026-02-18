@@ -32,9 +32,11 @@ def send_email_sync(
     text_content: str | None = None,
 ) -> bool:
     """Send email synchronously."""
+    # Use MAIL_FROM if set, otherwise fall back to MAIL_USERNAME (required by Gmail)
+    from_addr = settings.MAIL_FROM if settings.MAIL_FROM else settings.MAIL_USERNAME
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{settings.MAIL_FROM_NAME} <{settings.MAIL_FROM}>"
+    msg["From"] = f"{settings.MAIL_FROM_NAME} <{from_addr}>"
     msg["To"] = to_email
 
     # Add text version
@@ -46,7 +48,7 @@ def send_email_sync(
 
     try:
         server = get_smtp_connection()
-        server.sendmail(settings.MAIL_FROM, to_email, msg.as_string())
+        server.sendmail(from_addr, to_email, msg.as_string())
         server.quit()
         return True
     except Exception as e:

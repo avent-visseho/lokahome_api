@@ -22,8 +22,10 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from app.core.config import settings
 from app.services.auth import AuthService
 from app.services.user import UserService
+from app.tasks.email import send_password_reset_email, send_welcome_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -50,6 +52,16 @@ async def register(
     """
     auth_service = AuthService(session)
     user = await auth_service.register(data)
+
+    # Send welcome + verification email asynchronously
+    verification_token = auth_service.create_verification_token(user.email)
+    verification_url = f"{settings.FRONTEND_URL}/verify-email/{verification_token}"
+    send_welcome_email.delay(
+        user.email,
+        user.first_name,
+        verification_url,
+    )
+
     return user
 
 
@@ -104,10 +116,15 @@ async def request_password_reset(
     même si l'email n'existe pas.
     """
     auth_service = AuthService(session)
-    await auth_service.request_password_reset(data.email)
+    token = await auth_service.request_password_reset(data.email)
 
-    # TODO: Send email with token
-    # In production, send email asynchronously via Celery
+    if token:
+        # Look up user name for the email template
+        user_service = UserService(session)
+        user = await user_service.get_user_by_email(data.email)
+        user_name = user.first_name if user else data.email
+        reset_url = f"{settings.FRONTEND_URL}/password-reset?token={token}"
+        send_password_reset_email.delay(data.email, user_name, reset_url)
 
     return MessageResponse(
         message="Si cet email existe, un lien de réinitialisation a été envoyé"
@@ -170,12 +187,12 @@ async def resend_verification_email(
 
     auth_service = AuthService(session)
     token = auth_service.create_verification_token(current_user.email)
-
-    # TODO: Send email via Celery task in production
-    # For development, log the token
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"Verification token for {current_user.email}: {token}")
+    verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
+    send_welcome_email.delay(
+        current_user.email,
+        current_user.first_name,
+        verification_url,
+    )
 
     return MessageResponse(message="Email de vérification envoyé")
 

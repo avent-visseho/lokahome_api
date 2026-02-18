@@ -131,12 +131,15 @@ class Settings(BaseSettings):
     STRIPE_API_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # Frontend URL (used in email links)
+    FRONTEND_URL: str = "https://lokahome.app"
+
     # Email (SMTP)
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_PORT: int = 587
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
-    MAIL_FROM: str = "noreply@lokahome.bj"
+    MAIL_FROM: str = ""
     MAIL_FROM_NAME: str = "LOKAHOME"
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
