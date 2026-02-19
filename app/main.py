@@ -15,7 +15,6 @@ from app.core.config import settings
 from app.core.database import close_db, init_db
 from app.core.exceptions import BaseAPIException
 from app.core.init_db import init_superadmin, init_test_users
-from app.core.seed_data import init_seed_data
 from app.core.redis import redis_manager
 
 
@@ -39,10 +38,6 @@ async def lifespan(app: FastAPI):
     # Create test users in debug mode
     if settings.DEBUG:
         await init_test_users()
-
-    # Seed demo data in debug mode
-    if settings.DEBUG:
-        await init_seed_data()
 
     # Connect to Redis
     try:
