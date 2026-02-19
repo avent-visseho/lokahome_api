@@ -1,5 +1,5 @@
 PROJET D'APPLICATION DE LOCATION DE LOGEMENTS ET DE SERVICES
-**Nom du projet : LOKAHOME**
+**Nom du projet : FIFALOGE**
 **Version du document : 1.1**
 **Date : Janvier 2026**
 1. Contexte et justification du projet
@@ -156,7 +156,7 @@ L'architecture modulaire permettra :
 ·	Expat-Dakar/Bénin : Annonces classées incluant l'immobilier
 ·	Groupes Facebook locaux : Communication informelle
 
-9.2. Avantages concurrentiels de LOKAHOME
+9.2. Avantages concurrentiels de FIFALOGE
 ·	Spécialisation exclusive dans la location (pas de vente)
 ·	Paiement intégré et sécurisé via Mobile Money
 ·	Marketplace de services directement liée aux logements
@@ -356,13 +356,13 @@ Phase 4 - Expansion (Mois 10-12)
 ·	Respect des réglementations sur les paiements électroniques
 
 18.3. Propriété intellectuelle
-·	Dépôt de la marque LOKAHOME
+·	Dépôt de la marque FIFALOGE
 ·	Protection du code source et des designs
 ·	Licences des technologies utilisées
 
 19. Conclusion
 
-Le projet LOKAHOME ambitionne de transformer durablement le secteur de la location immobilière et des services au Bénin. En proposant une plateforme numérique moderne, sécurisée et centrée sur l'utilisateur, LOKAHOME répond aux besoins réels des locataires, propriétaires et prestataires de services.
+Le projet FIFALOGE ambitionne de transformer durablement le secteur de la location immobilière et des services au Bénin. En proposant une plateforme numérique moderne, sécurisée et centrée sur l'utilisateur, FIFALOGE répond aux besoins réels des locataires, propriétaires et prestataires de services.
 
 Les points clés du projet :
 ·	Une solution complète couvrant tout le cycle de location (recherche, réservation, paiement, gestion)
@@ -371,9 +371,9 @@ Les points clés du projet :
 ·	Une architecture technique moderne et évolutive
 ·	Une approche centrée sur le marché africain avec des solutions de paiement adaptées
 
-Avec une roadmap claire, une équipe dédiée et des partenariats stratégiques, LOKAHOME est positionné pour devenir la référence de la location immobilière au Bénin, avec une ambition d'expansion vers d'autres pays de la sous-région ouest-africaine.
+Avec une roadmap claire, une équipe dédiée et des partenariats stratégiques, FIFALOGE est positionné pour devenir la référence de la location immobilière au Bénin, avec une ambition d'expansion vers d'autres pays de la sous-région ouest-africaine.
 
 ---
-**Document rédigé pour le projet LOKAHOME**
+**Document rédigé pour le projet FIFALOGE**
 **Contact : [À compléter]**
 **Site web : [À compléter]**

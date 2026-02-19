@@ -6,7 +6,7 @@ from typing import Annotated
 import uuid as uuid_mod
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import ActiveUser, DbSession
@@ -25,7 +25,11 @@ from app.schemas.user import (
 from app.core.config import settings
 from app.services.auth import AuthService
 from app.services.user import UserService
-from app.tasks.email import send_password_reset_email, send_welcome_email
+from app.tasks.email import (
+    get_password_reset_email,
+    get_welcome_email,
+    send_email_sync,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -39,6 +43,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 async def register(
     data: UserRegister,
     session: DbSession,
+    background_tasks: BackgroundTasks,
 ):
     """
     Créer un nouveau compte utilisateur.
@@ -53,14 +58,10 @@ async def register(
     auth_service = AuthService(session)
     user = await auth_service.register(data)
 
-    # Send welcome + verification email asynchronously
     verification_token = auth_service.create_verification_token(user.email)
     verification_url = f"{settings.FRONTEND_URL}/verify-email/{verification_token}"
-    send_welcome_email.delay(
-        user.email,
-        user.first_name,
-        verification_url,
-    )
+    subject, html, text = get_welcome_email(user.first_name, verification_url)
+    background_tasks.add_task(send_email_sync, user.email, subject, html, text)
 
     return user
 
@@ -108,6 +109,7 @@ async def refresh_token(
 async def request_password_reset(
     data: PasswordResetRequest,
     session: DbSession,
+    background_tasks: BackgroundTasks,
 ):
     """
     Envoyer un email de réinitialisation de mot de passe.
@@ -119,12 +121,12 @@ async def request_password_reset(
     token = await auth_service.request_password_reset(data.email)
 
     if token:
-        # Look up user name for the email template
         user_service = UserService(session)
         user = await user_service.get_user_by_email(data.email)
         user_name = user.first_name if user else data.email
         reset_url = f"{settings.FRONTEND_URL}/password-reset?token={token}"
-        send_password_reset_email.delay(data.email, user_name, reset_url)
+        subject, html, text = get_password_reset_email(user_name, reset_url)
+        background_tasks.add_task(send_email_sync, data.email, subject, html, text)
 
     return MessageResponse(
         message="Si cet email existe, un lien de réinitialisation a été envoyé"
@@ -175,6 +177,7 @@ async def verify_email(
 async def resend_verification_email(
     current_user: ActiveUser,
     session: DbSession,
+    background_tasks: BackgroundTasks,
 ):
     """
     Renvoyer un email de vérification à l'utilisateur connecté.
@@ -188,11 +191,8 @@ async def resend_verification_email(
     auth_service = AuthService(session)
     token = auth_service.create_verification_token(current_user.email)
     verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
-    send_welcome_email.delay(
-        current_user.email,
-        current_user.first_name,
-        verification_url,
-    )
+    subject, html, text = get_welcome_email(current_user.first_name, verification_url)
+    background_tasks.add_task(send_email_sync, current_user.email, subject, html, text)
 
     return MessageResponse(message="Email de vérification envoyé")
 

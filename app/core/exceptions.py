@@ -1,5 +1,5 @@
 """
-Custom exceptions for the LOKAHOME API.
+Custom exceptions for the FIFALOGE API.
 """
 
 from fastapi import HTTPException, status

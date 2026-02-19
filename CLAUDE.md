@@ -6,7 +6,7 @@ Always use Context7 MCP tools when code generation, setup/installation steps, or
 
 ## Project Overview
 
-LOKAHOME is a rental property platform for Benin with an integrated service marketplace.
+FIFALOGE is a rental property platform for Benin with an integrated service marketplace.
 
 ## Development Commands
 
@@ -38,7 +38,7 @@ mypy app                               # Type checking
 # Docker environment
 docker-compose up -d                   # Start all services
 docker-compose logs -f api             # Follow API logs
-docker-compose exec db psql -U lokahome -d lokahome  # Database shell
+docker-compose exec db psql -U fifaloge -d fifaloge  # Database shell
 
 # Celery workers
 celery -A app.tasks worker --loglevel=info
@@ -90,7 +90,7 @@ Tests use pytest-asyncio with fixtures in `tests/conftest.py`:
 - `test_user`, `test_landlord`, `test_admin` - pre-created user fixtures
 - `auth_headers`, `landlord_auth_headers`, `admin_auth_headers` - JWT auth headers
 
-Test database: `lokahome_test` (created from main DB URL by replacing database name)
+Test database: `fifaloge_test` (created from main DB URL by replacing database name)
 
 ## Payment Providers
 

@@ -1,5 +1,5 @@
 """
-SQLAlchemy models for LOKAHOME API.
+SQLAlchemy models for FIFALOGE API.
 """
 from app.models.base import Base, BaseModel
 from app.models.booking import Booking, BookingStatus

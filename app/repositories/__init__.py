@@ -1,5 +1,5 @@
 """
-Repositories for LOKAHOME API data access layer.
+Repositories for FIFALOGE API data access layer.
 """
 from app.repositories.base import BaseRepository
 from app.repositories.booking import BookingRepository

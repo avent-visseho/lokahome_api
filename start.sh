@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# LOKAHOME API - Script de démarrage
+# FIFALOGE API - Script de démarrage
 # Usage: ./start.sh [command]
 #
 # Commands:
@@ -197,7 +197,7 @@ cmd_shell() {
     python3 -c "
 from app.core.config import settings
 from app.core.database import Base
-print('LOKAHOME Shell')
+print('FIFALOGE Shell')
 print('Variables disponibles: settings, Base')
 print('')
 "
@@ -275,7 +275,7 @@ cmd_install() {
 # Afficher l'aide
 cmd_help() {
     echo ""
-    echo -e "${BLUE}LOKAHOME API - Script de démarrage${NC}"
+    echo -e "${BLUE}FIFALOGE API - Script de démarrage${NC}"
     echo ""
     echo "Usage: ./start.sh [command]"
     echo ""

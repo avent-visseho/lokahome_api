@@ -1,5 +1,5 @@
 """
-LOKAHOME API - Main application entry point.
+FIFALOGE API - Main application entry point.
 """
 from contextlib import asynccontextmanager
 from pathlib import Path

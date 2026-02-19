@@ -1,5 +1,5 @@
 """
-Services for LOKAHOME API business logic layer.
+Services for FIFALOGE API business logic layer.
 """
 from app.services.auth import AuthService
 from app.services.booking import BookingService

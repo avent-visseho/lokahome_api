@@ -1,12 +1,12 @@
 [project]
-name = "lokahome-api"
+name = "fifaloge-api"
 version = "1.0.0"
-description = "LOKAHOME - API de location immobilière pour le Bénin"
+description = "FIFALOGE - API de location immobilière pour le Bénin"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "LOKAHOME Team", email = "dev@lokahome.bj"}
+    {name = "FIFALOGE Team", email = "dev@fifaloge.bj"}
 ]
 keywords = ["fastapi", "api", "real-estate", "benin", "rental"]
 classifiers = [

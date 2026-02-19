@@ -7,7 +7,7 @@ from celery.schedules import crontab
 from app.core.config import settings
 
 celery_app = Celery(
-    "lokahome",
+    "fifaloge",
     broker=str(settings.REDIS_URL),
     backend=str(settings.REDIS_URL),
     include=[

@@ -1,4 +1,4 @@
-# DOCUMENT TECHNIQUE - LOKAHOME
+# DOCUMENT TECHNIQUE - FIFALOGE
 ## Plateforme de Location de Logements et Services
 
 ---
@@ -138,7 +138,7 @@ app/
 ### 4.1. Structure détaillée
 
 ```
-lokahome-api/
+fifaloge-api/
 │
 ├── app/
 │   ├── __init__.py
@@ -276,7 +276,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="API pour la plateforme LokaHome",
+    description="API pour la plateforme Fifaloge",
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
@@ -295,7 +295,7 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 async def root():
-    return {"message": "LokaHome API", "version": settings.VERSION}
+    return {"message": "Fifaloge API", "version": settings.VERSION}
 
 @app.get("/health")
 async def health_check():
@@ -840,7 +840,7 @@ class MobileMoneyService:
                 "partyIdType": "MSISDN",
                 "partyId": phone
             },
-            "payerMessage": "Paiement LOKAHOME",
+            "payerMessage": "Paiement FIFALOGE",
             "payeeNote": "Location immobilière"
         }
 
@@ -1029,7 +1029,7 @@ class NotificationService:
         # SMS
         await self.sms_service.send_sms(
             phone=booking.tenant.phone,
-            message=f"LOKAHOME: Votre réservation #{booking_id[:8]} est confirmée."
+            message=f"FIFALOGE: Votre réservation #{booking_id[:8]} est confirmée."
         )
 
     async def send_payment_reminder(self, booking_id: str):
@@ -1142,7 +1142,7 @@ class EmailService:
         """Email de bienvenue"""
         await self.send_email(
             to=user.email,
-            subject="Bienvenue sur LOKAHOME",
+            subject="Bienvenue sur FIFALOGE",
             template_name="welcome.html",
             template_data={
                 "first_name": user.first_name,
@@ -1154,7 +1154,7 @@ class EmailService:
         """Email de confirmation de réservation"""
         await self.send_email(
             to=booking.tenant.email,
-            subject="Confirmation de votre réservation - LOKAHOME",
+            subject="Confirmation de votre réservation - FIFALOGE",
             template_name="booking_confirmation.html",
             template_data={
                 "tenant_name": booking.tenant.first_name,
@@ -1171,7 +1171,7 @@ class EmailService:
 
         await self.send_email(
             to=user.email,
-            subject="Réinitialisation de mot de passe - LOKAHOME",
+            subject="Réinitialisation de mot de passe - FIFALOGE",
             template_name="password_reset.html",
             template_data={
                 "first_name": user.first_name,
@@ -1210,12 +1210,12 @@ class SMSService:
 
     async def send_verification_code(self, phone: str, code: str):
         """Envoyer code de vérification"""
-        message = f"LOKAHOME: Votre code de vérification est {code}. Valide 10 minutes."
+        message = f"FIFALOGE: Votre code de vérification est {code}. Valide 10 minutes."
         return await self.send_sms(phone, message)
 
     async def send_booking_confirmation_sms(self, phone: str, booking_id: str):
         """SMS de confirmation de réservation"""
-        message = f"LOKAHOME: Réservation #{booking_id[:8]} confirmée. Consultez l'app pour les détails."
+        message = f"FIFALOGE: Réservation #{booking_id[:8]} confirmée. Consultez l'app pour les détails."
         return await self.send_sms(phone, message)
 ```
 
@@ -1369,7 +1369,7 @@ class GeocodingService:
                     "limit": 1
                 },
                 headers={
-                    "User-Agent": "LOKAHOME/1.0"
+                    "User-Agent": "FIFALOGE/1.0"
                 }
             )
 
@@ -1393,7 +1393,7 @@ class GeocodingService:
                     "format": "json"
                 },
                 headers={
-                    "User-Agent": "LOKAHOME/1.0"
+                    "User-Agent": "FIFALOGE/1.0"
                 }
             )
 
@@ -1672,9 +1672,9 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 app = FastAPI(
-    title="LOKAHOME API",
+    title="FIFALOGE API",
     description="""
-## API de la plateforme LOKAHOME
+## API de la plateforme FIFALOGE
 
 ### Fonctionnalités principales
 
@@ -1696,8 +1696,8 @@ Authorization: Bearer <access_token>
     """,
     version="1.0.0",
     contact={
-        "name": "LOKAHOME Support",
-        "email": "support@lokahome.bj"
+        "name": "FIFALOGE Support",
+        "email": "support@fifaloge.bj"
     },
     license_info={
         "name": "Propriétaire",
@@ -1829,7 +1829,7 @@ L'API génère automatiquement :
 # .env.example
 
 # Application
-PROJECT_NAME=LOKAHOME
+PROJECT_NAME=FIFALOGE
 VERSION=1.0.0
 DEBUG=false
 API_V1_STR=/api/v1
@@ -1839,7 +1839,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # Base de données
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/lokahome
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/fifaloge
 DATABASE_POOL_SIZE=20
 DATABASE_MAX_OVERFLOW=10
 
@@ -1847,15 +1847,15 @@ DATABASE_MAX_OVERFLOW=10
 REDIS_URL=redis://localhost:6379/0
 
 # CORS
-BACKEND_CORS_ORIGINS=["http://localhost:3000","https://lokahome.bj"]
+BACKEND_CORS_ORIGINS=["http://localhost:3000","https://fifaloge.bj"]
 
 # AWS S3 / MinIO
 S3_ENDPOINT_URL=http://localhost:9000
 AWS_ACCESS_KEY_ID=minioadmin
 AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_REGION=us-east-1
-S3_BUCKET_NAME=lokahome
-S3_PUBLIC_URL=http://localhost:9000/lokahome
+S3_BUCKET_NAME=fifaloge
+S3_PUBLIC_URL=http://localhost:9000/fifaloge
 
 # Paiements
 FEDAPAY_SECRET_KEY=sk_sandbox_xxx
@@ -1864,9 +1864,9 @@ MTN_API_KEY=xxx
 MTN_ENVIRONMENT=sandbox
 
 # Email
-MAIL_USERNAME=noreply@lokahome.bj
+MAIL_USERNAME=noreply@fifaloge.bj
 MAIL_PASSWORD=xxx
-MAIL_FROM=noreply@lokahome.bj
+MAIL_FROM=noreply@fifaloge.bj
 MAIL_PORT=587
 MAIL_SERVER=smtp.gmail.com
 
@@ -1892,7 +1892,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Application
-    PROJECT_NAME: str = "LOKAHOME"
+    PROJECT_NAME: str = "FIFALOGE"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
     API_V1_STR: str = "/api/v1"
@@ -1998,7 +1998,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lokahome:lokahome@db:5432/lokahome
+      - DATABASE_URL=postgresql+asyncpg://fifaloge:fifaloge@db:5432/fifaloge
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - db
@@ -2010,9 +2010,9 @@ services:
   db:
     image: postgis/postgis:15-3.3
     environment:
-      - POSTGRES_USER=lokahome
-      - POSTGRES_PASSWORD=lokahome
-      - POSTGRES_DB=lokahome
+      - POSTGRES_USER=fifaloge
+      - POSTGRES_PASSWORD=fifaloge
+      - POSTGRES_DB=fifaloge
     ports:
       - "5432:5432"
     volumes:
@@ -2041,7 +2041,7 @@ services:
     build: .
     command: celery -A app.tasks worker --loglevel=info
     environment:
-      - DATABASE_URL=postgresql+asyncpg://lokahome:lokahome@db:5432/lokahome
+      - DATABASE_URL=postgresql+asyncpg://fifaloge:fifaloge@db:5432/fifaloge
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - db
@@ -2071,7 +2071,7 @@ upstream api {
 
 server {
     listen 80;
-    server_name api.lokahome.bj;
+    server_name api.fifaloge.bj;
 
     # Redirection HTTPS
     return 301 https://$server_name$request_uri;
@@ -2079,10 +2079,10 @@ server {
 
 server {
     listen 443 ssl http2;
-    server_name api.lokahome.bj;
+    server_name api.fifaloge.bj;
 
-    ssl_certificate /etc/letsencrypt/live/api.lokahome.bj/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.lokahome.bj/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/api.fifaloge.bj/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.fifaloge.bj/privkey.pem;
 
     # Sécurité SSL
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -2127,15 +2127,15 @@ server {
 
 set -e
 
-echo "🚀 Déploiement LOKAHOME API"
+echo "🚀 Déploiement FIFALOGE API"
 
 # Variables
-DEPLOY_DIR=/opt/lokahome
-BACKUP_DIR=/opt/lokahome/backups
+DEPLOY_DIR=/opt/fifaloge
+BACKUP_DIR=/opt/fifaloge/backups
 
 # 1. Sauvegarde de la base de données
 echo "📦 Sauvegarde de la base de données..."
-docker exec lokahome-db pg_dump -U lokahome lokahome > $BACKUP_DIR/db_$(date +%Y%m%d_%H%M%S).sql
+docker exec fifaloge-db pg_dump -U fifaloge fifaloge > $BACKUP_DIR/db_$(date +%Y%m%d_%H%M%S).sql
 
 # 2. Pull des dernières modifications
 echo "📥 Récupération du code..."
@@ -2179,7 +2179,7 @@ from app.core.database import get_db
 from app.models.base import Base
 
 # Base de données de test
-SQLALCHEMY_DATABASE_URL = "postgresql://test:test@localhost:5432/lokahome_test"
+SQLALCHEMY_DATABASE_URL = "postgresql://test:test@localhost:5432/fifaloge_test"
 
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -2436,7 +2436,7 @@ class TestBookingsAPI:
 # tests/load/locustfile.py
 from locust import HttpUser, task, between
 
-class LokaHomeUser(HttpUser):
+class FifalogeUser(HttpUser):
     wait_time = between(1, 3)
 
     def on_start(self):
@@ -2613,30 +2613,30 @@ from fastapi import Response
 
 # Métriques
 REQUEST_COUNT = Counter(
-    'lokahome_requests_total',
+    'fifaloge_requests_total',
     'Total des requêtes HTTP',
     ['method', 'endpoint', 'status']
 )
 
 REQUEST_LATENCY = Histogram(
-    'lokahome_request_latency_seconds',
+    'fifaloge_request_latency_seconds',
     'Latence des requêtes HTTP',
     ['method', 'endpoint']
 )
 
 ACTIVE_USERS = Gauge(
-    'lokahome_active_users',
+    'fifaloge_active_users',
     'Nombre d\'utilisateurs actifs'
 )
 
 PROPERTIES_COUNT = Gauge(
-    'lokahome_properties_total',
+    'fifaloge_properties_total',
     'Nombre total de propriétés',
     ['status']
 )
 
 BOOKINGS_COUNT = Counter(
-    'lokahome_bookings_total',
+    'fifaloge_bookings_total',
     'Nombre total de réservations',
     ['status']
 )
@@ -2785,16 +2785,16 @@ Configuration des dashboards Grafana pour visualiser :
 - Métriques métier (réservations, paiements)
 
 ```json
-// grafana/dashboards/lokahome.json (extrait)
+// grafana/dashboards/fifaloge.json (extrait)
 {
-  "title": "LOKAHOME API Dashboard",
+  "title": "FIFALOGE API Dashboard",
   "panels": [
     {
       "title": "Requêtes par seconde",
       "type": "graph",
       "targets": [
         {
-          "expr": "rate(lokahome_requests_total[5m])",
+          "expr": "rate(fifaloge_requests_total[5m])",
           "legendFormat": "{{method}} {{endpoint}}"
         }
       ]
@@ -2804,7 +2804,7 @@ Configuration des dashboards Grafana pour visualiser :
       "type": "graph",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, rate(lokahome_request_latency_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.95, rate(fifaloge_request_latency_seconds_bucket[5m]))",
           "legendFormat": "p95"
         }
       ]
@@ -2814,7 +2814,7 @@ Configuration des dashboards Grafana pour visualiser :
       "type": "stat",
       "targets": [
         {
-          "expr": "sum(rate(lokahome_requests_total{status=~\"5..\"}[5m])) / sum(rate(lokahome_requests_total[5m])) * 100"
+          "expr": "sum(rate(fifaloge_requests_total{status=~\"5..\"}[5m])) / sum(rate(fifaloge_requests_total[5m])) * 100"
         }
       ]
     }
@@ -2852,7 +2852,7 @@ celery -A app.tasks beat --loglevel=info
 celery -A app.tasks flower  # Monitoring
 
 # Base de données
-docker-compose exec db psql -U lokahome -d lokahome
+docker-compose exec db psql -U fifaloge -d fifaloge
 ```
 
 ### 16.2. Références
@@ -2866,6 +2866,6 @@ docker-compose exec db psql -U lokahome -d lokahome
 
 ---
 
-**Document rédigé pour le projet LOKAHOME**
+**Document rédigé pour le projet FIFALOGE**
 **Version**: 1.0
 **Dernière mise à jour**: Janvier 2026

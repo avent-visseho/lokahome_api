@@ -1,5 +1,5 @@
 """
-Configuration settings for LOKAHOME API.
+Configuration settings for FIFALOGE API.
 Uses Pydantic Settings for environment variable management.
 """
 from functools import lru_cache
@@ -29,14 +29,14 @@ class Settings(BaseSettings):
     )
 
     # Application
-    APP_NAME: str = "LOKAHOME API"
+    APP_NAME: str = "FIFALOGE API"
     APP_VERSION: str = "1.0.0"
     APP_DESCRIPTION: str = "API de location immobilière pour le Bénin"
     DEBUG: bool = False
     ENVIRONMENT: Literal["development", "staging", "production"] = "development"
 
     # Super Admin (créé automatiquement au démarrage)
-    SUPERADMIN_EMAIL: str = "admin@lokahome.bj"
+    SUPERADMIN_EMAIL: str = "admin@fifaloge.bj"
     SUPERADMIN_PASSWORD: str = "Admin@2024!"
     SUPERADMIN_FIRST_NAME: str = "Super"
     SUPERADMIN_LAST_NAME: str = "Admin"
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: PostgresDsn = Field(
-        default="postgresql+asyncpg://lokahome:lokahome@localhost:5432/lokahome"
+        default="postgresql+asyncpg://fifaloge:fifaloge@localhost:5432/fifaloge"
     )
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str | None = None
     S3_ACCESS_KEY: str = ""
     S3_SECRET_KEY: str = ""
-    S3_BUCKET_NAME: str = "lokahome"
+    S3_BUCKET_NAME: str = "fifaloge"
     S3_REGION: str = "us-east-1"
 
     # FedaPay
@@ -132,7 +132,7 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
 
     # Frontend URL (used in email links)
-    FRONTEND_URL: str = "https://lokahome.app"
+    FRONTEND_URL: str = "https://fifaloge.app"
 
     # Email (SMTP)
     MAIL_SERVER: str = "smtp.gmail.com"
@@ -140,7 +140,7 @@ class Settings(BaseSettings):
     MAIL_USERNAME: str = ""
     MAIL_PASSWORD: str = ""
     MAIL_FROM: str = ""
-    MAIL_FROM_NAME: str = "LOKAHOME"
+    MAIL_FROM_NAME: str = "FIFALOGE"
     MAIL_STARTTLS: bool = True
     MAIL_SSL_TLS: bool = False
 

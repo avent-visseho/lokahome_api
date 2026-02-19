@@ -346,7 +346,7 @@ class MobileMoneyClient:
         currency: str,
         phone_number: str,
         external_id: str,
-        payer_message: str = "Paiement LOKAHOME",
+        payer_message: str = "Paiement FIFALOGE",
         payee_note: str = "Location immobilière",
     ) -> dict:
         """

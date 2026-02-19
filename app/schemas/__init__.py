@@ -1,5 +1,5 @@
 """
-Pydantic schemas for LOKAHOME API.
+Pydantic schemas for FIFALOGE API.
 """
 from app.schemas.base import (
     BaseSchema,

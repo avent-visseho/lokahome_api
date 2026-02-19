@@ -1,5 +1,5 @@
 """
-Alembic environment configuration for LOKAHOME database migrations.
+Alembic environment configuration for FIFALOGE database migrations.
 """
 import asyncio
 from logging.config import fileConfig

@@ -1,5 +1,5 @@
 """
-Celery tasks for LOKAHOME API asynchronous processing.
+Celery tasks for FIFALOGE API asynchronous processing.
 """
 from app.tasks.celery_app import celery_app
 from app.tasks.email import (

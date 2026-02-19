@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for LOKAHOME API tests.
+Pytest configuration and fixtures for FIFALOGE API tests.
 """
 import asyncio
 from collections.abc import AsyncGenerator, Generator
@@ -19,7 +19,7 @@ from app.models.user import User, UserRole
 
 # Test database URL (use a separate test database)
 TEST_DATABASE_URL = settings.DATABASE_URL.unicode_string().replace(
-    "/lokahome", "/lokahome_test"
+    "/fifaloge", "/fifaloge_test"
 )
 
 # Create async engine for tests
