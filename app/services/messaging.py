@@ -322,6 +322,7 @@ class MessagingService:
                     "last_name": other_user.last_name if other_user else "supprimé",
                     "avatar_url": other_user.avatar_url if other_user else None,
                     "is_verified": other_user.is_verified if other_user else False,
+                    "created_at": other_user.created_at if other_user else None,
                 },
                 "property_id": conv.property_id,
                 "last_message_at": conv.last_message_at,
