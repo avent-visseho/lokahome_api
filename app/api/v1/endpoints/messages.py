@@ -182,6 +182,9 @@ async def start_conversation(
         booking_id=data.booking_id,
     )
 
+    # Refresh conversation after send_message flushes expired its attributes
+    await session.refresh(conversation)
+
     # Notify recipient via WebSocket
     await manager.send_personal_message(
         {
@@ -302,6 +305,9 @@ async def send_message(
         content=data.content,
         attachments=data.attachments,
     )
+
+    # Refresh message after multiple flushes expired its attributes
+    await session.refresh(message)
 
     # Notify recipient via WebSocket
     await manager.send_personal_message(
