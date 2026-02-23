@@ -197,7 +197,24 @@ async def start_conversation(
         str(data.participant_id),
     )
 
-    return conversation
+    # Compute unread_count for current user
+    unread = (
+        conversation.unread_count_one
+        if conversation.participant_one_id == current_user.id
+        else conversation.unread_count_two
+    )
+    return ConversationResponse(
+        id=conversation.id,
+        participant_one_id=conversation.participant_one_id,
+        participant_two_id=conversation.participant_two_id,
+        property_id=conversation.property_id,
+        booking_id=conversation.booking_id,
+        last_message_at=conversation.last_message_at,
+        last_message_preview=conversation.last_message_preview,
+        unread_count=unread,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+    )
 
 
 @router.get(
@@ -212,7 +229,26 @@ async def get_conversation(
 ):
     """Récupérer les détails d'une conversation."""
     service = MessagingService(session)
-    return await service.get_conversation(conversation_id, current_user)
+    conversation = await service.get_conversation(conversation_id, current_user)
+
+    # Compute unread_count for current user
+    unread = (
+        conversation.unread_count_one
+        if conversation.participant_one_id == current_user.id
+        else conversation.unread_count_two
+    )
+    return ConversationResponse(
+        id=conversation.id,
+        participant_one_id=conversation.participant_one_id,
+        participant_two_id=conversation.participant_two_id,
+        property_id=conversation.property_id,
+        booking_id=conversation.booking_id,
+        last_message_at=conversation.last_message_at,
+        last_message_preview=conversation.last_message_preview,
+        unread_count=unread,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+    )
 
 
 @router.get(
