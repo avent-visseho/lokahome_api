@@ -1,13 +1,18 @@
 """
 Email tasks for asynchronous email sending.
 """
+import logging
 import smtplib
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from celery import shared_task
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_smtp_connection():
@@ -50,15 +55,64 @@ def send_email_sync(
         server = get_smtp_connection()
         server.sendmail(from_addr, to_email, msg.as_string())
         server.quit()
+        logger.info(f"Email sent to {to_email}: {subject}")
         return True
     except Exception as e:
-        print(f"Email send error: {e}")
+        logger.error(f"Email send error to {to_email}: {e}", exc_info=True)
+        return False
+
+
+def send_email_with_attachment_sync(
+    to_email: str,
+    subject: str,
+    html_content: str,
+    attachment_path: str,
+    attachment_filename: str,
+    text_content: str | None = None,
+) -> bool:
+    """Send email with a file attachment synchronously."""
+    from_addr = settings.MAIL_FROM if settings.MAIL_FROM else settings.MAIL_USERNAME
+    msg = MIMEMultipart("mixed")
+    msg["Subject"] = subject
+    msg["From"] = f"{settings.MAIL_FROM_NAME} <{from_addr}>"
+    msg["To"] = to_email
+
+    # Body
+    body_part = MIMEMultipart("alternative")
+    if text_content:
+        body_part.attach(MIMEText(text_content, "plain"))
+    body_part.attach(MIMEText(html_content, "html"))
+    msg.attach(body_part)
+
+    # Attachment
+    try:
+        with open(attachment_path, "rb") as f:
+            part = MIMEBase("application", "pdf")
+            part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header(
+                "Content-Disposition",
+                f"attachment; filename={attachment_filename}",
+            )
+            msg.attach(part)
+    except FileNotFoundError:
+        logger.error(f"Attachment not found: {attachment_path}")
+        return False
+
+    try:
+        server = get_smtp_connection()
+        server.sendmail(from_addr, to_email, msg.as_string())
+        server.quit()
+        logger.info(f"Email with attachment sent to {to_email}: {subject}")
+        return True
+    except Exception as e:
+        logger.error(f"Email send error to {to_email}: {e}", exc_info=True)
         return False
 
 
 # === Email Templates ===
 
-def get_welcome_email(user_name: str, verification_url: str) -> tuple[str, str]:
+def get_welcome_email(user_name: str, verification_url: str) -> tuple[str, str, str]:
     """Get welcome email content."""
     subject = f"Bienvenue sur {settings.APP_NAME}!"
 

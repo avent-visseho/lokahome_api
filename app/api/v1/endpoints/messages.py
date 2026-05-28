@@ -2,14 +2,17 @@
 Messaging endpoints for conversations, messages, and notifications.
 Includes WebSocket support for real-time communication.
 """
+import uuid as uuid_mod
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, File, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 
 from app.api.deps import ActiveUser, DbSession
 from app.core.security import decode_token
 from app.schemas.base import MessageResponse
 from app.schemas.message import (
+    ChatMessageResponse,
     ConversationCreate,
     ConversationListResponse,
     ConversationResponse,
@@ -17,11 +20,79 @@ from app.schemas.message import (
     MessageCreate,
     MessageListResponse,
     NotificationListResponse,
+    ReplyToMessageResponse,
 )
-from app.schemas.message import ChatMessageResponse
 from app.services.messaging import MessagingService
 
 router = APIRouter(prefix="/messages", tags=["Messages"])
+
+# Upload configuration
+UPLOAD_DIR = Path(__file__).parent.parent.parent.parent.parent / "static" / "uploads" / "messages"
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo"}
+ALLOWED_DOC_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+ALL_ALLOWED_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_VIDEO_TYPES | ALLOWED_DOC_TYPES
+MAX_IMAGE_DOC_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+# === File Upload ===
+
+@router.post(
+    "/upload",
+    summary="Uploader un fichier pour le chat",
+)
+async def upload_chat_file(
+    current_user: ActiveUser,
+    file: UploadFile = File(...),
+):
+    """
+    Uploader un fichier à joindre à un message.
+
+    - Images : JPEG, PNG, WebP, GIF (max 10 Mo)
+    - Vidéos : MP4, MOV, AVI (max 50 Mo)
+    - Documents : PDF, DOC, DOCX, XLS, XLSX (max 10 Mo)
+    """
+    from fastapi import HTTPException
+
+    content_type = file.content_type or ""
+    if content_type not in ALL_ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Type de fichier non autorisé.",
+        )
+
+    contents = await file.read()
+    max_size = MAX_VIDEO_SIZE if content_type in ALLOWED_VIDEO_TYPES else MAX_IMAGE_DOC_SIZE
+    if len(contents) > max_size:
+        limit_mb = max_size // (1024 * 1024)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le fichier ne doit pas dépasser {limit_mb} Mo.",
+        )
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    original_name = file.filename or "file"
+    ext = Path(original_name).suffix.lower()
+    filename = f"{uuid_mod.uuid4().hex}{ext}"
+    file_path = UPLOAD_DIR / filename
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    url = f"/static/uploads/messages/{filename}"
+    return {
+        "url": url,
+        "name": original_name,
+        "size": len(contents),
+        "mime_type": content_type,
+    }
 
 
 # === WebSocket Connection Manager ===
@@ -133,6 +204,50 @@ async def websocket_endpoint(
         manager.disconnect(websocket, user_id)
 
 
+def _build_reply_to(message) -> ReplyToMessageResponse | None:
+    """Build a ReplyToMessageResponse from a message's reply_to relationship."""
+    if message.reply_to_id is None or message.reply_to is None:
+        return None
+    parent = message.reply_to
+    return ReplyToMessageResponse(
+        id=parent.id,
+        sender_id=parent.sender_id,
+        content=parent.content[:100],
+    )
+
+
+def _build_message_response(message) -> ChatMessageResponse:
+    """Build a ChatMessageResponse with reply_to data."""
+    return ChatMessageResponse(
+        id=message.id,
+        conversation_id=message.conversation_id,
+        sender_id=message.sender_id,
+        receiver_id=message.receiver_id,
+        content=message.content,
+        attachments=message.attachments,
+        reply_to_id=message.reply_to_id,
+        reply_to=_build_reply_to(message),
+        is_read=message.is_read,
+        read_at=message.read_at,
+        created_at=message.created_at,
+        updated_at=message.updated_at,
+    )
+
+
+def _build_message_list_response(message) -> MessageListResponse:
+    """Build a MessageListResponse with reply_to data."""
+    return MessageListResponse(
+        id=message.id,
+        sender_id=message.sender_id,
+        content=message.content,
+        attachments=message.attachments,
+        reply_to_id=message.reply_to_id,
+        reply_to=_build_reply_to(message),
+        is_read=message.is_read,
+        created_at=message.created_at,
+    )
+
+
 # === Conversations ===
 
 @router.get(
@@ -174,31 +289,34 @@ async def start_conversation(
     - **property_id**: (Optionnel) ID du bien concerné
     """
     service = MessagingService(session)
-    conversation, message = await service.start_conversation(
+    conversation, message, is_new = await service.start_conversation(
         sender=current_user,
         recipient_id=data.participant_id,
         initial_message=data.initial_message,
         property_id=data.property_id,
         booking_id=data.booking_id,
+        attachments=data.attachments,
     )
 
     # Refresh conversation after send_message flushes expired its attributes
     await session.refresh(conversation)
 
-    # Notify recipient via WebSocket
-    await manager.send_personal_message(
-        {
-            "type": "new_conversation",
-            "conversation_id": str(conversation.id),
-            "message": {
-                "id": str(message.id),
-                "content": message.content,
-                "sender_id": str(current_user.id),
-                "created_at": message.created_at.isoformat(),
+    # Notify recipient via WebSocket only if a message was sent
+    if message is not None:
+        await manager.send_personal_message(
+            {
+                "type": "new_conversation",
+                "conversation_id": str(conversation.id),
+                "message": {
+                    "id": str(message.id),
+                    "content": message.content,
+                    "sender_id": str(current_user.id),
+                    "attachments": message.attachments,
+                    "created_at": message.created_at.isoformat(),
+                },
             },
-        },
-        str(data.participant_id),
-    )
+            str(data.participant_id),
+        )
 
     # Compute unread_count for current user
     unread = (
@@ -215,6 +333,7 @@ async def start_conversation(
         last_message_at=conversation.last_message_at,
         last_message_preview=conversation.last_message_preview,
         unread_count=unread,
+        is_new=is_new,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -268,12 +387,13 @@ async def get_conversation_messages(
 ):
     """Récupérer les messages d'une conversation."""
     service = MessagingService(session)
-    return await service.get_conversation_messages(
+    messages = await service.get_conversation_messages(
         conversation_id=conversation_id,
         user=current_user,
         skip=skip,
         limit=limit,
     )
+    return [_build_message_list_response(m) for m in messages]
 
 
 @router.post(
@@ -304,28 +424,31 @@ async def send_message(
         sender=current_user,
         content=data.content,
         attachments=data.attachments,
+        reply_to_id=data.reply_to_id,
     )
 
     # Refresh message after multiple flushes expired its attributes
     await session.refresh(message)
 
     # Notify recipient via WebSocket
+    ws_payload: dict = {
+        "id": str(message.id),
+        "content": message.content,
+        "sender_id": str(current_user.id),
+        "attachments": message.attachments,
+        "reply_to_id": str(message.reply_to_id) if message.reply_to_id else None,
+        "created_at": message.created_at.isoformat(),
+    }
     await manager.send_personal_message(
         {
             "type": "message",
             "conversation_id": str(conversation_id),
-            "message": {
-                "id": str(message.id),
-                "content": message.content,
-                "sender_id": str(current_user.id),
-                "attachments": message.attachments,
-                "created_at": message.created_at.isoformat(),
-            },
+            "message": ws_payload,
         },
         str(recipient_id),
     )
 
-    return message
+    return _build_message_response(message)
 
 
 @router.post(

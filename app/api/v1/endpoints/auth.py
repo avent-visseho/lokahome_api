@@ -7,6 +7,7 @@ import uuid as uuid_mod
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import ActiveUser, DbSession
@@ -59,7 +60,7 @@ async def register(
     user = await auth_service.register(data)
 
     verification_token = auth_service.create_verification_token(user.email)
-    verification_url = f"{settings.FRONTEND_URL}/verify-email/{verification_token}"
+    verification_url = f"{settings.BASE_API_URL}/api/v1/auth/verify-email/{verification_token}"
     subject, html, text = get_welcome_email(user.first_name, verification_url)
     background_tasks.add_task(send_email_sync, user.email, subject, html, text)
 
@@ -151,22 +152,87 @@ async def confirm_password_reset(
     return MessageResponse(message="Mot de passe réinitialisé avec succès")
 
 
-@router.post(
+@router.get(
     "/verify-email/{token}",
-    response_model=MessageResponse,
-    summary="Vérifier l'adresse email",
+    response_class=HTMLResponse,
+    summary="Vérifier l'adresse email (lien depuis l'email)",
 )
-async def verify_email(
+async def verify_email_get(
     token: str,
     session: DbSession,
 ):
     """
-    Vérifier l'adresse email avec le token reçu.
+    Vérifier l'adresse email quand l'utilisateur clique le lien dans l'email.
+    Retourne une page HTML de confirmation.
+    """
+    try:
+        auth_service = AuthService(session)
+        await auth_service.verify_email_token(token)
+        return HTMLResponse(content=_verification_page(
+            success=True,
+            title="Email vérifié !",
+            message="Votre adresse email a été vérifiée avec succès. Vous pouvez maintenant vous connecter dans l'application.",
+        ))
+    except Exception:
+        return HTMLResponse(content=_verification_page(
+            success=False,
+            title="Lien invalide",
+            message="Ce lien de vérification est invalide ou a expiré. Veuillez demander un nouveau lien depuis l'application.",
+        ), status_code=400)
+
+
+@router.post(
+    "/verify-email/{token}",
+    response_model=MessageResponse,
+    summary="Vérifier l'adresse email (API)",
+)
+async def verify_email_post(
+    token: str,
+    session: DbSession,
+):
+    """
+    Vérifier l'adresse email via API (usage programmatique).
     """
     auth_service = AuthService(session)
     await auth_service.verify_email_token(token)
 
     return MessageResponse(message="Email vérifié avec succès")
+
+
+def _verification_page(success: bool, title: str, message: str) -> str:
+    """Generate HTML verification result page."""
+    color = "#16a34a" if success else "#dc2626"
+    icon = "&#10004;" if success else "&#10008;"
+    return f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{title} - {settings.APP_NAME}</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               background: #f0f4f8; display: flex; align-items: center; justify-content: center;
+               min-height: 100vh; padding: 20px; }}
+        .card {{ background: white; border-radius: 16px; padding: 48px 32px; max-width: 420px;
+                 width: 100%; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }}
+        .icon {{ width: 80px; height: 80px; border-radius: 50%; background: {color};
+                 color: white; font-size: 40px; display: flex; align-items: center;
+                 justify-content: center; margin: 0 auto 24px; }}
+        h1 {{ color: #1e293b; font-size: 24px; margin-bottom: 12px; }}
+        p {{ color: #64748b; font-size: 16px; line-height: 1.6; }}
+        .app-name {{ color: #2563eb; font-weight: 600; margin-top: 32px; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">{icon}</div>
+        <h1>{title}</h1>
+        <p>{message}</p>
+        <p class="app-name">{settings.APP_NAME}</p>
+    </div>
+</body>
+</html>"""
 
 
 @router.post(
@@ -190,7 +256,7 @@ async def resend_verification_email(
 
     auth_service = AuthService(session)
     token = auth_service.create_verification_token(current_user.email)
-    verification_url = f"{settings.FRONTEND_URL}/verify-email/{token}"
+    verification_url = f"{settings.BASE_API_URL}/api/v1/auth/verify-email/{token}"
     subject, html, text = get_welcome_email(current_user.first_name, verification_url)
     background_tasks.add_task(send_email_sync, current_user.email, subject, html, text)
 
@@ -218,6 +284,7 @@ async def get_current_user_profile(
 )
 async def logout(
     current_user: ActiveUser,
+    session: DbSession,
 ):
     """
     Déconnecter l'utilisateur.
@@ -226,7 +293,10 @@ async def logout(
     pour la conformité et peut être utilisée pour invalider les tokens
     côté client ou dans un système de blacklist Redis.
     """
-    # TODO: Add token to Redis blacklist if needed
+    # Clear FCM token so this device stops receiving push notifications
+    user_service = UserService(session)
+    await user_service.clear_fcm_token(current_user)
+
     return MessageResponse(message="Déconnexion réussie")
 
 

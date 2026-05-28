@@ -4,7 +4,7 @@ Property schemas for validation and serialization.
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.models.property import PropertyStatus, PropertyType, RentalPeriod
 from app.schemas.base import BaseSchema, IDSchema, TimestampSchema
@@ -168,8 +168,44 @@ class PropertyListResponse(BaseSchema):
     is_available: bool
     is_verified: bool
     is_featured: bool
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
     primary_image_url: str | None = None
     owner: UserPublicProfile
+
+    @model_validator(mode="before")
+    @classmethod
+    def compute_primary_image_url(cls, data: any) -> any:
+        """Compute primary_image_url from the images relationship if not already set."""
+        # Handle ORM objects (from_attributes=True)
+        if hasattr(data, "__dict__"):
+            existing = getattr(data, "__dict__", {}).get("primary_image_url")
+            if existing:
+                return data
+            # Try to extract from images relationship
+            try:
+                images = data.images
+                if images:
+                    for img in images:
+                        if img.is_primary:
+                            # Set on __dict__ so Pydantic picks it up
+                            data.__dict__["primary_image_url"] = img.url
+                            return data
+                    data.__dict__["primary_image_url"] = images[0].url
+            except Exception:
+                pass
+        # Handle dict data (e.g., from manual construction)
+        elif isinstance(data, dict):
+            if not data.get("primary_image_url"):
+                images = data.get("images", [])
+                if images:
+                    for img in images:
+                        if isinstance(img, dict) and img.get("is_primary"):
+                            data["primary_image_url"] = img["url"]
+                            return data
+                    if isinstance(images[0], dict):
+                        data["primary_image_url"] = images[0]["url"]
+        return data
 
 
 # --- Search and Filter Schemas ---

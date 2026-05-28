@@ -1,6 +1,24 @@
 """
 Pydantic schemas for FIFALOGE API.
 """
+from app.schemas.agent import (
+    AgentCommissionResponse,
+    AgentCommissionSummary,
+    AgentDashboardResponse,
+    AgentMandateCreate,
+    AgentMandateListResponse,
+    AgentMandateResponse,
+    AgentProfileCreate,
+    AgentProfileListResponse,
+    AgentProfileResponse,
+    AgentProfileUpdate,
+    AgentSearchParams,
+    AgentShareLinkResponse,
+    PropertyVisitCreate,
+    PropertyVisitListResponse,
+    PropertyVisitResponse,
+    PropertyVisitUpdate,
+)
 from app.schemas.base import (
     BaseSchema,
     ErrorResponse,
@@ -100,6 +118,23 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    # Agent
+    "AgentProfileCreate",
+    "AgentProfileUpdate",
+    "AgentProfileResponse",
+    "AgentProfileListResponse",
+    "AgentMandateCreate",
+    "AgentMandateResponse",
+    "AgentMandateListResponse",
+    "PropertyVisitCreate",
+    "PropertyVisitUpdate",
+    "PropertyVisitResponse",
+    "PropertyVisitListResponse",
+    "AgentDashboardResponse",
+    "AgentCommissionResponse",
+    "AgentCommissionSummary",
+    "AgentShareLinkResponse",
+    "AgentSearchParams",
     # Base
     "BaseSchema",
     "IDSchema",

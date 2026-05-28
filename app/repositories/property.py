@@ -134,9 +134,13 @@ class PropertyRepository(BaseRepository[Property]):
         if is_available is not None:
             query = query.where(Property.is_available == is_available)
 
-        # Sorting
-        if hasattr(Property, sort_by):
-            column = getattr(Property, sort_by)
+        # Sorting — map aliases to actual columns
+        sort_aliases = {
+            "popular": "views_count",
+        }
+        resolved_sort = sort_aliases.get(sort_by, sort_by)
+        if hasattr(Property, resolved_sort):
+            column = getattr(Property, resolved_sort)
             query = query.order_by(column.desc() if sort_desc else column.asc())
 
         # Pagination

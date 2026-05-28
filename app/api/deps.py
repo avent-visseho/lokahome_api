@@ -100,8 +100,9 @@ def require_roles(*roles: UserRole):
 
 
 # Role-specific dependencies
-RequireTenant = Depends(require_roles(UserRole.TENANT, UserRole.LANDLORD, UserRole.ADMIN))
+RequireTenant = Depends(require_roles(UserRole.TENANT, UserRole.LANDLORD, UserRole.AGENT, UserRole.ADMIN))
 RequireLandlord = Depends(require_roles(UserRole.LANDLORD, UserRole.ADMIN))
+RequireAgent = Depends(require_roles(UserRole.AGENT, UserRole.ADMIN))
 RequireProvider = Depends(require_roles(UserRole.PROVIDER, UserRole.ADMIN))
 RequireAdmin = Depends(require_roles(UserRole.ADMIN))
 

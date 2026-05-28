@@ -1,6 +1,7 @@
 """
 Services for FIFALOGE API business logic layer.
 """
+from app.services.agent import AgentService
 from app.services.auth import AuthService
 from app.services.booking import BookingService
 from app.services.messaging import MessagingService
@@ -11,6 +12,7 @@ from app.services.service_marketplace import ServiceMarketplaceService
 from app.services.user import UserService
 
 __all__ = [
+    "AgentService",
     "AuthService",
     "UserService",
     "PropertyService",

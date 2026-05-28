@@ -3,7 +3,7 @@ User repository for data access operations.
 """
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserRole
@@ -131,8 +131,26 @@ class UserRepository(BaseRepository[User]):
         return user
 
     async def update_fcm_token(self, user: User, fcm_token: str) -> User:
-        """Update user's FCM token for push notifications."""
+        """Update user's FCM token for push notifications.
+
+        Also clears this token from any other user to prevent
+        duplicate notifications on shared devices.
+        """
+        # Clear this token from any other user (same device, different account)
+        await self.session.execute(
+            update(User)
+            .where(User.fcm_token == fcm_token, User.id != user.id)
+            .values(fcm_token=None)
+        )
+
         user.fcm_token = fcm_token
+        await self.session.flush()
+        await self.session.refresh(user)
+        return user
+
+    async def clear_fcm_token(self, user: User) -> User:
+        """Clear user's FCM token (e.g. on logout)."""
+        user.fcm_token = None
         await self.session.flush()
         await self.session.refresh(user)
         return user

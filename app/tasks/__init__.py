@@ -32,6 +32,12 @@ from app.tasks.notifications import (
     send_push_to_topic,
     send_sms,
 )
+from app.tasks.contracts import (
+    expire_pending_contracts,
+    generate_contract_task,
+    send_contract_email,
+    send_signed_contract_to_both,
+)
 from app.tasks.payments import (
     check_pending_payments,
     generate_payment_report,
@@ -62,6 +68,11 @@ __all__ = [
     "process_refund",
     "generate_payment_report",
     "reconcile_daily_payments",
+    # Contract tasks
+    "generate_contract_task",
+    "send_contract_email",
+    "send_signed_contract_to_both",
+    "expire_pending_contracts",
     # Maintenance tasks
     "cleanup_expired_tokens",
     "cleanup_expired_sessions",

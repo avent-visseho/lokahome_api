@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
+    from app.models.agent import AgentProfile
     from app.models.property import Property
     from app.models.service import ServiceProvider
     from app.models.user import User
@@ -23,6 +24,7 @@ class ReviewType(str, enum.Enum):
     PROPERTY = "property"  # Tenant reviews property/landlord
     TENANT = "tenant"  # Landlord reviews tenant
     SERVICE_PROVIDER = "service_provider"  # User reviews service provider
+    AGENT = "agent"  # User reviews agent/demarcheur
 
 
 class Review(BaseModel):
@@ -47,6 +49,9 @@ class Review(BaseModel):
     )
     service_provider_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("service_providers.id", ondelete="CASCADE")
+    )
+    agent_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_profiles.id", ondelete="CASCADE")
     )
 
     # Booking reference (for property/tenant reviews)
@@ -94,6 +99,9 @@ class Review(BaseModel):
     )
     service_provider: Mapped["ServiceProvider | None"] = relationship(
         "ServiceProvider", back_populates="reviews"
+    )
+    agent_profile: Mapped["AgentProfile | None"] = relationship(
+        "AgentProfile", back_populates="reviews"
     )
 
     def __repr__(self) -> str:

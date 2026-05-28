@@ -48,6 +48,15 @@ class PaymentType(str, enum.Enum):
     SERVICE = "service"
     SUBSCRIPTION = "subscription"
     REFUND = "refund"
+    AGENT_COMMISSION = "agent_commission"
+
+
+class CommissionType(str, enum.Enum):
+    """Type of commission split."""
+
+    PLATFORM = "platform"
+    AGENT = "agent"
+    LANDLORD = "landlord"
 
 
 class Payment(BaseModel):
@@ -110,6 +119,12 @@ class Payment(BaseModel):
     refund_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     refund_reason: Mapped[str | None] = mapped_column(Text)
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Agent/Demarcheur commission tracking
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_profiles.id", ondelete="SET NULL")
+    )
+    commission_type: Mapped[CommissionType | None] = mapped_column(Enum(CommissionType))
 
     # Phone number for mobile money
     phone_number: Mapped[str | None] = mapped_column(String(20))

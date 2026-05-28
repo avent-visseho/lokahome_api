@@ -1,7 +1,7 @@
 """
 Booking schemas for validation and serialization.
 """
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -11,6 +11,17 @@ from app.models.booking import BookingStatus
 from app.schemas.base import BaseSchema, IDSchema, TimestampSchema
 from app.schemas.property import PropertyListResponse
 from app.schemas.user import UserPublicProfile
+
+
+class BookingAgentInfo(BaseSchema):
+    """Agent info embedded in booking response."""
+
+    agent_id: UUID | None = None
+    agent_code: str | None = None
+    agent_name: str | None = None
+    commission_rate: Decimal | None = None
+    commission_amount: Decimal | None = None
+    commission_status: str | None = None
 
 
 class BookingBase(BaseSchema):
@@ -32,7 +43,7 @@ class BookingBase(BaseSchema):
 class BookingCreate(BookingBase):
     """Booking creation schema."""
 
-    pass
+    agent_code: str | None = None
 
 
 class BookingUpdate(BaseSchema):
@@ -74,9 +85,15 @@ class BookingResponse(IDSchema, TimestampSchema):
     guests_count: int
     tenant_notes: str | None
     landlord_notes: str | None
+    contract_signed_at: date | None = None
+    contract_url: str | None = None
     cancelled_at: date | None
     cancelled_by: str | None
     cancellation_reason: str | None
+    agent_id: UUID | None = None
+    agent_commission_rate: Decimal | None = None
+    agent_commission_amount: Decimal | None = None
+    agent_commission_status: str | None = None
 
     @property
     def duration_days(self) -> int:
@@ -100,6 +117,8 @@ class BookingListResponse(BaseSchema):
     status: BookingStatus
     total_amount: Decimal
     currency: str
+    contract_signed_at: date | None = None
+    contract_url: str | None = None
     property: PropertyListResponse = Field(validation_alias=AliasChoices("property", "booked_property"))
     tenant: UserPublicProfile
 

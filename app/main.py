@@ -107,8 +107,8 @@ def create_application() -> FastAPI:
 
     # Mount static files for property images
     static_dir = Path(__file__).parent.parent / "static"
-    if static_dir.exists():
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+    static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # Health check endpoint
     @app.get("/health", tags=["Health"])

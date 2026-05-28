@@ -42,10 +42,9 @@ def create_access_token(
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    to_encode.update({
-        "exp": expire,
-        "type": "access",
-    })
+    to_encode["exp"] = expire
+    if "type" not in to_encode:
+        to_encode["type"] = "access"
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
@@ -67,10 +66,9 @@ def create_refresh_token(
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     )
-    to_encode.update({
-        "exp": expire,
-        "type": "refresh",
-    })
+    to_encode["exp"] = expire
+    if "type" not in to_encode:
+        to_encode["type"] = "refresh"
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

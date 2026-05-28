@@ -91,6 +91,11 @@ class Message(BaseModel):
         JSONB, default=[]
     )  # [{"type": "image", "url": "..."}]
 
+    # Reply to another message (self-reference)
+    reply_to_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("messages.id", ondelete="SET NULL")
+    )
+
     # Status
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -112,6 +117,9 @@ class Message(BaseModel):
     )
     receiver: Mapped["User"] = relationship(
         "User", foreign_keys=[receiver_id], back_populates="received_messages"
+    )
+    reply_to: Mapped["Message | None"] = relationship(
+        "Message", remote_side="Message.id", foreign_keys=[reply_to_id], lazy="noload"
     )
 
     def __repr__(self) -> str:

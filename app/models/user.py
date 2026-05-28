@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
+    from app.models.agent import AgentProfile
     from app.models.booking import Booking
     from app.models.message import Message
     from app.models.property import Property
@@ -25,6 +26,7 @@ class UserRole(str, enum.Enum):
     TENANT = "tenant"
     LANDLORD = "landlord"
     PROVIDER = "provider"
+    AGENT = "agent"
     ADMIN = "admin"
 
 
@@ -106,6 +108,9 @@ class User(BaseModel):
     )
     service_requests: Mapped[list["ServiceRequest"]] = relationship(
         "ServiceRequest", back_populates="requester"
+    )
+    agent_profile: Mapped["AgentProfile | None"] = relationship(
+        "AgentProfile", back_populates="user", uselist=False
     )
 
     @property

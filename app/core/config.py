@@ -43,8 +43,7 @@ class Settings(BaseSettings):
 
     # Server
     HOST: str = "0.0.0.0"
-    PORT: int = 10000
-    #PORT: int = 8000
+    PORT: int = 8000
     WORKERS: int = 4
     RELOAD: bool = False
 
@@ -134,6 +133,9 @@ class Settings(BaseSettings):
     # Frontend URL (used in email links)
     FRONTEND_URL: str = "https://fifaloge.app"
 
+    # Base API URL (used for email verification links)
+    BASE_API_URL: str = "http://185.194.217.12:8080"
+
     # Email (SMTP)
     MAIL_SERVER: str = "smtp.gmail.com"
     MAIL_PORT: int = 587
@@ -154,6 +156,10 @@ class Settings(BaseSettings):
 
     # Sentry
     SENTRY_DSN: str = ""
+
+    # Contracts
+    CONTRACT_EXPIRY_HOURS: int = 72
+    CONTRACT_UPLOAD_DIR: str = "static/uploads/contracts"
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100

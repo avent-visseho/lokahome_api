@@ -1,8 +1,22 @@
 """
 Maintenance tasks for system cleanup and health.
 """
+import logging
 
 from celery import shared_task
+from sqlalchemy import and_, create_engine, false, select, true, update
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
+
+
+def _get_sync_session() -> Session:
+    """Create a synchronous DB session for Celery tasks."""
+    settings = get_settings()
+    engine = create_engine(settings.database_url_sync, pool_pre_ping=True)
+    return Session(engine)
 
 
 @shared_task
@@ -58,15 +72,87 @@ def cleanup_orphaned_files():
 @shared_task
 def update_property_rankings():
     """
-    Update property search rankings and scores.
-    Called daily to refresh search relevance.
+    Auto-feature the top most-viewed active properties.
+    Called daily at 2:00 AM by Celery beat.
+
+    Logic:
+    - Select the top N active properties by views_count (default: 10)
+    - Set is_featured=True for those
+    - Remove is_featured from properties no longer in the top N
+    - Properties manually featured by admin (via endpoint) are always kept
     """
-    print("Updating property rankings...")
-    # This would:
-    # 1. Calculate property scores based on reviews, bookings, views
-    # 2. Update search ranking factors
-    # 3. Refresh featured/promoted properties
-    return {"status": "completed"}
+    from app.models.property import Property, PropertyStatus
+
+    TOP_N = 10
+    MIN_VIEWS = 5  # Minimum views to qualify for auto-feature
+
+    session = _get_sync_session()
+    try:
+        # 1. Get top N most-viewed active properties above the minimum views
+        top_ids_query = (
+            select(Property.id)
+            .where(
+                and_(
+                    Property.status == PropertyStatus.ACTIVE,
+                    Property.is_available == true(),
+                    Property.views_count >= MIN_VIEWS,
+                )
+            )
+            .order_by(Property.views_count.desc())
+            .limit(TOP_N)
+        )
+        top_ids = [row[0] for row in session.execute(top_ids_query).all()]
+
+        if not top_ids:
+            logger.info("No properties qualify for auto-feature (min %d views)", MIN_VIEWS)
+            return {"status": "completed", "featured": 0, "unfeatured": 0}
+
+        # 2. Feature the top properties
+        featured_count = session.execute(
+            update(Property)
+            .where(
+                and_(
+                    Property.id.in_(top_ids),
+                    Property.is_featured == false(),
+                )
+            )
+            .values(is_featured=True)
+        ).rowcount
+
+        # 3. Un-feature properties that are no longer in the top N
+        #    (only active/available ones — keep admin-featured inactive ones untouched)
+        unfeatured_count = session.execute(
+            update(Property)
+            .where(
+                and_(
+                    Property.is_featured == true(),
+                    Property.status == PropertyStatus.ACTIVE,
+                    Property.is_available == true(),
+                    Property.id.notin_(top_ids),
+                )
+            )
+            .values(is_featured=False)
+        ).rowcount
+
+        session.commit()
+
+        logger.info(
+            "Auto-feature completed: %d newly featured, %d unfeatured",
+            featured_count,
+            unfeatured_count,
+        )
+        return {
+            "status": "completed",
+            "featured": featured_count,
+            "unfeatured": unfeatured_count,
+            "top_ids": [str(id) for id in top_ids],
+        }
+    except Exception:
+        session.rollback()
+        logger.exception("Error in update_property_rankings")
+        raise
+    finally:
+        session.close()
 
 
 @shared_task

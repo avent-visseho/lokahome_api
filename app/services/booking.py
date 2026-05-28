@@ -202,7 +202,54 @@ class BookingService:
             "status": BookingStatus.PENDING,
         }
 
-        return await self.booking_repo.create(booking_data)
+        booking = await self.booking_repo.create(booking_data)
+
+        # Track agent referral if agent_code is provided
+        if data.agent_code:
+            try:
+                from app.services.agent import AgentService
+                agent_service = AgentService(self.session)
+                booking = await agent_service.track_referral(data.agent_code, booking)
+            except Exception:
+                pass  # Non-blocking — booking still created without agent
+
+        # Create in-app notification for landlord
+        tenant_name = f"{tenant.first_name or ''} {tenant.last_name or ''}".strip()
+        try:
+            from app.models.message import Notification as NotificationModel
+            notif = NotificationModel(
+                user_id=property_obj.owner_id,
+                type="new_booking",
+                title="Nouvelle demande de réservation",
+                body=f"{tenant_name} souhaite réserver {property_obj.title}",
+                data={
+                    "booking_id": str(booking.id),
+                    "booking_reference": booking.reference,
+                    "property_id": str(property_obj.id),
+                },
+            )
+            self.session.add(notif)
+            await self.session.flush()
+        except Exception:
+            pass  # Non-blocking
+
+        # Send push + email via Celery
+        try:
+            from app.tasks.notifications import notify_new_booking
+            notify_new_booking.delay(
+                landlord_fcm_token=getattr(property_obj.owner, "fcm_token", None),
+                landlord_email=property_obj.owner.email,
+                landlord_name=property_obj.owner.first_name or "",
+                property_title=property_obj.title,
+                tenant_name=tenant_name,
+                check_in=str(data.check_in),
+                check_out=str(data.check_out),
+                booking_reference=booking.reference,
+            )
+        except Exception:
+            pass  # Non-blocking
+
+        return booking
 
     async def update_booking(
         self,
@@ -259,7 +306,7 @@ class BookingService:
         booking = await self.get_booking(booking_id)
 
         # Verify landlord owns the property
-        property_obj = await self.property_repo.get(booking.property_id)
+        property_obj = await self.property_repo.get_with_details(booking.property_id)
         if property_obj.owner_id != landlord.id and landlord.role != UserRole.ADMIN:
             raise InsufficientPermissionsException()
 
@@ -270,7 +317,24 @@ class BookingService:
         if notes:
             update_data["landlord_notes"] = notes
 
-        return await self.booking_repo.update(booking, update_data)
+        booking = await self.booking_repo.update(booking, update_data)
+
+        # Generate contract synchronously in the same transaction
+        # (Celery can't be used here because the transaction isn't committed yet)
+        try:
+            from app.services.contract import ContractService
+            contract_service = ContractService(self.session)
+            await contract_service.generate_contract(booking.id)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(
+                f"Contract generation failed for booking {booking.id}: {e}"
+            )
+
+        # Notify tenant
+        await self._notify_status_change(booking, property_obj, "approved")
+
+        return booking
 
     async def reject_booking(
         self,
@@ -282,7 +346,7 @@ class BookingService:
         booking = await self.get_booking(booking_id)
 
         # Verify landlord owns the property
-        property_obj = await self.property_repo.get(booking.property_id)
+        property_obj = await self.property_repo.get_with_details(booking.property_id)
         if property_obj.owner_id != landlord.id and landlord.role != UserRole.ADMIN:
             raise InsufficientPermissionsException()
 
@@ -294,7 +358,15 @@ class BookingService:
             "landlord_notes": reason,
         }
 
-        return await self.booking_repo.update(booking, update_data)
+        booking = await self.booking_repo.update(booking, update_data)
+
+        # Notify tenant
+        await self._notify_status_change(
+            booking, property_obj, "rejected",
+            reason=reason,
+        )
+
+        return booking
 
     async def cancel_booking(
         self,
@@ -306,7 +378,7 @@ class BookingService:
         booking = await self.get_booking(booking_id)
 
         # Determine who is cancelling
-        property_obj = await self.property_repo.get(booking.property_id)
+        property_obj = await self.property_repo.get_with_details(booking.property_id)
         is_tenant = booking.tenant_id == user.id
         is_landlord = property_obj.owner_id == user.id
         is_admin = user.role == UserRole.ADMIN
@@ -329,7 +401,26 @@ class BookingService:
             "cancellation_reason": reason,
         }
 
-        return await self.booking_repo.update(booking, update_data)
+        booking = await self.booking_repo.update(booking, update_data)
+
+        # Notify the other party
+        if is_tenant:
+            # Tenant cancelled → notify landlord
+            owner = property_obj.owner
+            if owner:
+                await self._notify_status_change(
+                    booking, property_obj, "cancelled",
+                    target_user=owner,
+                    reason=reason,
+                )
+        else:
+            # Landlord/admin cancelled → notify tenant
+            await self._notify_status_change(
+                booking, property_obj, "cancelled",
+                reason=reason,
+            )
+
+        return booking
 
     async def confirm_booking(self, booking_id: UUID) -> Booking:
         """Confirm booking after payment."""
@@ -340,9 +431,101 @@ class BookingService:
                 "La réservation doit être approuvée avant confirmation"
             )
 
-        return await self.booking_repo.update(
+        booking = await self.booking_repo.update(
             booking, {"status": BookingStatus.CONFIRMED}
         )
+
+        # Notify tenant + landlord
+        property_obj = await self.property_repo.get_with_details(booking.property_id)
+        await self._notify_status_change(booking, property_obj, "confirmed")
+
+        return booking
+
+    async def _notify_status_change(
+        self,
+        booking: Booking,
+        property_obj: Property,
+        new_status: str,
+        *,
+        target_user: User | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Send push + email notification and create in-app notification."""
+        # Default target is the tenant
+        user = target_user or booking.tenant
+        if not user:
+            return
+
+        status_titles = {
+            "approved": "Réservation approuvée",
+            "rejected": "Réservation refusée",
+            "confirmed": "Réservation confirmée",
+            "cancelled": "Réservation annulée",
+        }
+
+        status_types = {
+            "approved": "booking_approved",
+            "rejected": "booking_rejected",
+            "confirmed": "booking_update",
+            "cancelled": "booking_cancelled",
+        }
+
+        messages = {
+            "approved": (
+                f"Votre réservation pour {property_obj.title} a été approuvée. "
+                "Un contrat a été généré, veuillez le consulter et le signer."
+            ),
+            "rejected": (
+                f"Votre demande de réservation pour {property_obj.title} a été refusée."
+                + (f" Motif : {reason}" if reason else "")
+            ),
+            "confirmed": (
+                f"Votre réservation pour {property_obj.title} est confirmée ! "
+                "Merci pour votre paiement."
+            ),
+            "cancelled": (
+                f"La réservation pour {property_obj.title} a été annulée."
+                + (f" Motif : {reason}" if reason else "")
+            ),
+        }
+
+        title = status_titles.get(new_status, "Mise à jour de réservation")
+        body = messages.get(new_status, "Mise à jour de votre réservation.")
+        notif_type = status_types.get(new_status, "booking_update")
+
+        # Create in-app notification record
+        try:
+            from app.models.message import Notification as NotificationModel
+            notif = NotificationModel(
+                user_id=user.id,
+                type=notif_type,
+                title=title,
+                body=body,
+                data={
+                    "booking_id": str(booking.id),
+                    "booking_reference": booking.reference,
+                    "property_id": str(property_obj.id),
+                },
+            )
+            self.session.add(notif)
+            await self.session.flush()
+        except Exception:
+            pass  # Non-blocking
+
+        # Send push + email via Celery
+        try:
+            from app.tasks.notifications import notify_booking_status_change
+            notify_booking_status_change.delay(
+                user_fcm_token=getattr(user, "fcm_token", None),
+                user_email=user.email,
+                user_name=user.first_name or "",
+                property_title=property_obj.title,
+                booking_reference=booking.reference,
+                new_status=new_status,
+                message=body,
+            )
+        except Exception:
+            pass  # Non-blocking — Celery may be unavailable
 
     async def get_tenant_bookings(
         self,

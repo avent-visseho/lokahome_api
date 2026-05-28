@@ -101,6 +101,10 @@ class UserService:
         """Update user FCM token for push notifications."""
         return await self.user_repo.update_fcm_token(user, fcm_token)
 
+    async def clear_fcm_token(self, user: User) -> User:
+        """Clear user FCM token (on logout)."""
+        return await self.user_repo.clear_fcm_token(user)
+
     async def list_users(
         self,
         *,

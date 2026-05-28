@@ -435,6 +435,27 @@ async def suspend_property(
     return MessageResponse(message=msg)
 
 
+@router.post(
+    "/properties/{property_id}/reactivate",
+    response_model=MessageResponse,
+    summary="Réactiver un bien suspendu",
+)
+async def reactivate_property(
+    property_id: UUID,
+    session: DbSession,
+):
+    """Réactiver un bien précédemment suspendu (inactive → active)."""
+    prop = await session.get(Property, property_id)
+    if not prop:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Bien non trouvé")
+
+    prop.status = PropertyStatus.ACTIVE
+    await session.commit()
+
+    return MessageResponse(message="Bien réactivé et publié")
+
+
 # === Service Provider Management ===
 
 @router.get(

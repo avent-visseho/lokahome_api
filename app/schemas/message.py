@@ -18,6 +18,7 @@ class ConversationCreate(BaseSchema):
     property_id: UUID | None = None
     booking_id: UUID | None = None
     initial_message: str = Field(min_length=1)
+    attachments: list[dict] | None = None  # e.g. [{"type": "property_card", ...}]
 
 
 class ConversationResponse(IDSchema, TimestampSchema):
@@ -30,6 +31,7 @@ class ConversationResponse(IDSchema, TimestampSchema):
     last_message_at: datetime | None
     last_message_preview: str | None
     unread_count: int  # For current user
+    is_new: bool = False  # True if conversation was just created
 
 
 class ConversationListResponse(BaseSchema):
@@ -49,6 +51,15 @@ class MessageCreate(BaseSchema):
 
     content: str = Field(min_length=1)
     attachments: list[dict] | None = None  # [{"type": "image", "url": "..."}]
+    reply_to_id: UUID | None = None
+
+
+class ReplyToMessageResponse(BaseSchema):
+    """Summarized reply-to message (embedded in message responses)."""
+
+    id: UUID
+    sender_id: UUID
+    content: str = Field(description="Truncated content of the replied-to message")
 
 
 class ChatMessageResponse(IDSchema, TimestampSchema):
@@ -59,6 +70,8 @@ class ChatMessageResponse(IDSchema, TimestampSchema):
     receiver_id: UUID
     content: str
     attachments: list[dict] | None
+    reply_to_id: UUID | None = None
+    reply_to: ReplyToMessageResponse | None = None
     is_read: bool
     read_at: datetime | None
 
@@ -70,6 +83,8 @@ class MessageListResponse(BaseSchema):
     sender_id: UUID
     content: str
     attachments: list[dict] | None
+    reply_to_id: UUID | None = None
+    reply_to: ReplyToMessageResponse | None = None
     is_read: bool
     created_at: datetime
 

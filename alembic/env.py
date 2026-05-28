@@ -22,8 +22,11 @@ if config.config_file_name is not None:
 # Model metadata for autogenerate
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url with settings
-config.set_main_option("sqlalchemy.url", settings.database_url_sync)
+# Override sqlalchemy.url with async URL for asyncpg driver
+# Escape % signs for configparser interpolation (e.g. %40 in passwords)
+config.set_main_option(
+    "sqlalchemy.url", str(settings.DATABASE_URL).replace("%", "%%")
+)
 
 
 def run_migrations_offline() -> None:
@@ -46,9 +49,24 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    """Exclude PostGIS/Tiger tables from autogenerate."""
+    if type_ == "table" and name in target_metadata.tables:
+        return True
+    if type_ == "table" and not reflected:
+        return True
+    if type_ != "table":
+        return True
+    return False
+
+
 def do_run_migrations(connection: Connection) -> None:
     """Run migrations with the given connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

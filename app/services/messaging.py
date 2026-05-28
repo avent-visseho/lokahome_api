@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     BusinessLogicException,
@@ -125,6 +126,7 @@ class MessageRepository(BaseRepository[Message]):
         """Get messages in a conversation."""
         result = await self.session.execute(
             select(Message)
+            .options(selectinload(Message.reply_to))
             .where(Message.conversation_id == conversation_id)
             .order_by(Message.created_at.desc())
             .offset(skip)
@@ -259,29 +261,38 @@ class MessagingService:
         initial_message: str,
         property_id: UUID | None = None,
         booking_id: UUID | None = None,
-    ) -> tuple[Conversation, Message]:
-        """Start a new conversation or continue existing one."""
+        attachments: list[dict] | None = None,
+    ) -> tuple[Conversation, Message | None, bool]:
+        """Start a new conversation or return existing one.
+
+        Returns:
+            tuple of (conversation, message_or_none, is_new).
+            message is only created when the conversation is new.
+        """
         if sender.id == recipient_id:
             raise BusinessLogicException(
                 "Vous ne pouvez pas démarrer une conversation avec vous-même"
             )
 
         # Get or create conversation
-        conversation, _ = await self.conversation_repo.get_or_create(
+        conversation, created = await self.conversation_repo.get_or_create(
             user_one_id=sender.id,
             user_two_id=recipient_id,
             property_id=property_id,
             booking_id=booking_id,
         )
 
-        # Send initial message
-        message = await self.send_message(
-            conversation_id=conversation.id,
-            sender=sender,
-            content=initial_message,
-        )
+        # Only send the initial message for brand-new conversations
+        message = None
+        if created:
+            message = await self.send_message(
+                conversation_id=conversation.id,
+                sender=sender,
+                content=initial_message,
+                attachments=attachments,
+            )
 
-        return conversation, message
+        return conversation, message, created
 
     async def get_user_conversations(
         self,
@@ -339,6 +350,7 @@ class MessagingService:
         sender: User,
         content: str,
         attachments: list[dict] | None = None,
+        reply_to_id: UUID | None = None,
     ) -> Message:
         """Send a message in a conversation."""
         conversation = await self.get_conversation(conversation_id, sender)
@@ -351,13 +363,26 @@ class MessagingService:
         )
 
         # Create message
-        message = await self.message_repo.create({
+        data: dict = {
             "conversation_id": conversation_id,
             "sender_id": sender.id,
             "receiver_id": receiver_id,
             "content": content,
             "attachments": attachments or [],
-        })
+        }
+        if reply_to_id is not None:
+            data["reply_to_id"] = reply_to_id
+
+        message = await self.message_repo.create(data)
+
+        # Eager-load reply_to if this message is a reply
+        if reply_to_id is not None:
+            result = await self.session.execute(
+                select(Message)
+                .options(selectinload(Message.reply_to))
+                .where(Message.id == message.id)
+            )
+            message = result.scalar_one()
 
         # Update conversation
         await self.conversation_repo.update_last_message(
@@ -366,18 +391,38 @@ class MessagingService:
             sender_id=sender.id,
         )
 
+        # Build sender display name (first_name + last_name, fallback to email)
+        sender_display = f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+        if not sender_display:
+            sender_display = sender.email.split("@")[0]
+
         # Create notification for receiver
         await self.create_notification(
             user_id=receiver_id,
             notification_type="new_message",
             title="Nouveau message",
-            body=f"{sender.first_name}: {content[:50]}...",
+            body=f"{sender_display}: {content[:50]}...",
             data={
                 "conversation_id": str(conversation_id),
                 "message_id": str(message.id),
                 "sender_id": str(sender.id),
             },
         )
+
+        # Send FCM push notification to receiver
+        try:
+            receiver = await self.session.get(User, receiver_id)
+            if receiver and receiver.fcm_token:
+                from app.tasks.notifications import notify_new_message
+
+                notify_new_message.delay(
+                    recipient_fcm_token=receiver.fcm_token,
+                    sender_name=sender_display,
+                    message_preview=content[:100],
+                    conversation_id=str(conversation_id),
+                )
+        except Exception:
+            pass  # Push notification is non-critical
 
         return message
 

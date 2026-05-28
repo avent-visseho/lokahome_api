@@ -3,6 +3,7 @@ Payment service for FedaPay, Mobile Money, and Stripe integrations.
 """
 import hashlib
 import hmac
+import logging
 import random
 import string
 from datetime import UTC, datetime
@@ -12,6 +13,8 @@ from uuid import UUID
 import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -93,6 +96,26 @@ class PaymentRepository(BaseRepository[Payment]):
         return list(result.scalars().all())
 
 
+def _extract_fedapay_field(response: dict, field: str):
+    """Extract a field from FedaPay response, handling various key formats.
+
+    FedaPay wraps responses in keys like "v1/transaction", "v1/token", etc.
+    This helper tries all known patterns.
+    """
+    # Try "v1/xxx" keys first (e.g. "v1/transaction", "v1/token")
+    for key, value in response.items():
+        if key.startswith("v1/") and isinstance(value, dict):
+            if field in value:
+                return value[field]
+    # Try "v1" key
+    if isinstance(response.get("v1"), dict) and field in response["v1"]:
+        return response["v1"][field]
+    # Try top-level
+    if field in response:
+        return response[field]
+    return None
+
+
 class FedaPayClient:
     """
     Client for FedaPay API integration.
@@ -135,6 +158,10 @@ class FedaPayClient:
 
     def _get_headers(self) -> dict:
         """Get API headers with Bearer token authentication."""
+        if not self.secret_key:
+            raise PaymentFailedException(
+                "FedaPay n'est pas configuré. Vérifiez FEDAPAY_SECRET_KEY dans le .env"
+            )
         return {
             "Authorization": f"Bearer {self.secret_key}",
             "Content-Type": "application/json",
@@ -203,8 +230,12 @@ class FedaPayClient:
             )
 
             if response.status_code not in [200, 201]:
+                logger.error(
+                    f"FedaPay transaction creation failed: "
+                    f"status={response.status_code}, body={response.text}"
+                )
                 raise PaymentFailedException(
-                    f"FedaPay transaction creation failed: {response.text}"
+                    f"FedaPay: {response.status_code} - {response.text[:200]}"
                 )
 
             return response.json()
@@ -227,8 +258,12 @@ class FedaPayClient:
             )
 
             if response.status_code not in [200, 201]:
+                logger.error(
+                    f"FedaPay token generation failed: "
+                    f"status={response.status_code}, body={response.text}"
+                )
                 raise PaymentFailedException(
-                    f"FedaPay token generation failed: {response.text}"
+                    f"FedaPay token: {response.status_code} - {response.text[:200]}"
                 )
 
             return response.json()
@@ -452,6 +487,17 @@ class PaymentService:
                 "La réservation doit être approuvée avant le paiement"
             )
 
+        # Vérifier que le contrat est entièrement signé
+        from app.models.contract import Contract, ContractStatus
+        contract_result = await self.session.execute(
+            select(Contract).where(Contract.booking_id == booking_id)
+        )
+        contract = contract_result.scalar_one_or_none()
+        if not contract or contract.status != ContractStatus.FULLY_SIGNED:
+            raise BusinessLogicException(
+                "Le contrat doit être signé par les deux parties avant le paiement"
+            )
+
         if booking.tenant_id != payer.id:
             raise BusinessLogicException(
                 "Vous ne pouvez payer que vos propres réservations"
@@ -575,6 +621,7 @@ class PaymentService:
                 )
 
         except Exception as e:
+            logger.error(f"Payment processing failed for {payment.reference}: {e}")
             # Update payment status on error
             await self.payment_repo.update(payment, {
                 "status": PaymentStatus.FAILED,
@@ -613,17 +660,35 @@ class PaymentService:
             },
         )
 
-        transaction_id = transaction.get("v1", {}).get("id")
+        print(f"[FEDAPAY] create_transaction response: {transaction}")
+
+        # Extract transaction ID — FedaPay response key is "v1/transaction"
+        # e.g. {"v1/transaction": {"klass": "v1/transaction", "id": 7450, ...}}
+        transaction_id = _extract_fedapay_field(transaction, "id")
+        print(f"[FEDAPAY] extracted transaction_id: {transaction_id}")
+
+        if not transaction_id:
+            raise PaymentFailedException(
+                f"FedaPay: impossible d'extraire l'ID de transaction. Réponse: {str(transaction)[:300]}"
+            )
+
+        # Save provider_reference immediately so webhooks can find this payment
+        await self.payment_repo.update(payment, {
+            "provider_reference": str(transaction_id),
+            "provider_response": transaction,
+        })
 
         # Generate payment token
         token_response = await self.fedapay.generate_payment_token(transaction_id)
-        payment_url = token_response.get("v1", {}).get("url")
+        print(f"[FEDAPAY] generate_token response: {token_response}")
 
-        # Update payment with provider reference
+        # Extract payment URL
+        payment_url = _extract_fedapay_field(token_response, "url")
+        print(f"[FEDAPAY] extracted payment_url: {payment_url}")
+
+        # Update status to processing
         await self.payment_repo.update(payment, {
-            "provider_reference": str(transaction_id),
             "status": PaymentStatus.PROCESSING,
-            "provider_response": transaction,
         })
 
         return {
@@ -713,22 +778,54 @@ class PaymentService:
 
     async def handle_fedapay_webhook(
         self,
-        event: str,
-        data: dict,
+        raw_payload: dict,
         signature: str | None = None,
     ) -> Payment:
         """Handle FedaPay webhook callback."""
-        # Verify signature if provided
-        # if signature and not self.fedapay.verify_webhook_signature(...):
-        #     raise BusinessLogicException("Invalid webhook signature")
+        logger.info(f"Processing FedaPay webhook: {raw_payload}")
 
-        transaction = data.get("transaction", {})
-        transaction_id = str(transaction.get("id"))
-        status = transaction.get("status")
+        # FedaPay webhook format:
+        # {"name": "transaction.created", "object": "transaction", "entity": {"klass": "v1/transaction", "id": 123, ...}}
+        # The actual data is in "entity", not "object" (which is just the type string)
+        event = raw_payload.get("name", "")
+        obj = raw_payload.get("entity") or raw_payload.get("object", {})
+
+        # object can be a string (type name) — use entity instead
+        if isinstance(obj, str):
+            obj = {}
+
+        # Extract transaction ID and status from the object directly
+        # FedaPay sends the transaction as the "object" field
+        transaction_id = str(obj.get("id", ""))
+        status = obj.get("status", "")
+
+        # If object has a nested "transaction" key, try that too
+        if not transaction_id or transaction_id == "None":
+            transaction = obj.get("transaction", {})
+            if isinstance(transaction, dict):
+                transaction_id = str(transaction.get("id", ""))
+                status = status or transaction.get("status", "")
+
+        # Also try extracting status from event name (e.g. "transaction.approved")
+        if not status and "." in event:
+            status = event.split(".")[-1]
+
+        print(f"[FEDAPAY WEBHOOK] parsed: event={event}, transaction_id={transaction_id}, status={status}")
 
         # Find payment by provider reference
-        payment = await self.payment_repo.get_by_provider_reference(transaction_id)
+        payment = await self.payment_repo.get_by_provider_reference(str(transaction_id))
+
+        # Fallback: try finding by payment_reference in metadata
         if not payment:
+            metadata = obj.get("metadata", {}) or {}
+            if isinstance(metadata, dict):
+                payment_ref = metadata.get("payment_reference")
+                if payment_ref:
+                    print(f"[FEDAPAY WEBHOOK] trying fallback by reference: {payment_ref}")
+                    payment = await self.payment_repo.get_by_reference(payment_ref)
+
+        if not payment:
+            print(f"[FEDAPAY WEBHOOK] payment not found for transaction_id={transaction_id}")
             raise NotFoundException("Paiement")
 
         # Map FedaPay status to our status
@@ -745,7 +842,7 @@ class PaymentService:
         update_data = {
             "status": new_status,
             "provider_status": status,
-            "provider_response": data,
+            "provider_response": raw_payload,
         }
 
         if new_status == PaymentStatus.COMPLETED:
@@ -760,7 +857,7 @@ class PaymentService:
 
         elif new_status == PaymentStatus.FAILED:
             update_data["failed_at"] = datetime.now(UTC)
-            update_data["error_message"] = transaction.get("error_message")
+            update_data["error_message"] = obj.get("error_message") or obj.get("last_error_message")
 
         payment = await self.payment_repo.update(payment, update_data)
         return payment

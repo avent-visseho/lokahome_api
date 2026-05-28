@@ -3,17 +3,19 @@ Booking model for property reservations.
 """
 import enum
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
+    from app.models.agent import AgentProfile
+    from app.models.contract import Contract
     from app.models.payment import Payment
     from app.models.property import Property
     from app.models.user import User
@@ -85,6 +87,19 @@ class Booking(BaseModel):
     contract_signed_at: Mapped[date | None] = mapped_column(Date)
     contract_url: Mapped[str | None] = mapped_column(String(500))
 
+    # Agent/Demarcheur (if booking was facilitated by an agent)
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_profiles.id", ondelete="SET NULL")
+    )
+    agent_commission_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    agent_commission_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    agent_commission_status: Mapped[str | None] = mapped_column(
+        String(20)
+    )  # pending, paid, disputed
+    agent_commission_paid_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
     # Additional metadata
     extra_data: Mapped[dict | None] = mapped_column(JSONB, default={})
 
@@ -97,6 +112,12 @@ class Booking(BaseModel):
     )
     payments: Mapped[list["Payment"]] = relationship(
         "Payment", back_populates="booking", cascade="all, delete-orphan"
+    )
+    contract: Mapped["Contract | None"] = relationship(
+        "Contract", back_populates="booking", uselist=False, cascade="all, delete-orphan"
+    )
+    agent: Mapped["AgentProfile | None"] = relationship(
+        "AgentProfile", foreign_keys=[agent_id]
     )
 
     @property

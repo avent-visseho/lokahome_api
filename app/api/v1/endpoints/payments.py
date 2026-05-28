@@ -1,10 +1,13 @@
 """
 Payment endpoints for transaction management and webhooks.
 """
+import logging
 from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Query, Request, status
+
+logger = logging.getLogger(__name__)
 
 from app.api.deps import ActiveUser, DbSession
 from app.models.payment import PaymentStatus, PaymentType
@@ -224,21 +227,19 @@ async def fedapay_webhook(
     This endpoint receives payment status updates from FedaPay.
     """
     body = await request.json()
-    event = body.get("name", "")
-    data = body.get("object", {})
+    print(f"[FEDAPAY WEBHOOK] raw payload: {body}")
 
     payment_service = PaymentService(session)
 
     try:
         await payment_service.handle_fedapay_webhook(
-            event=event,
-            data=data,
+            raw_payload=body,
             signature=x_fedapay_signature,
         )
         return {"status": "ok"}
     except Exception as e:
         # Log error but return 200 to prevent retries
-        print(f"FedaPay webhook error: {e}")
+        logger.error(f"FedaPay webhook error: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
